@@ -1,0 +1,410 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18'
+  PNPM_VERSION: '8'
+
+jobs:
+  # Lint and Type Check
+  lint-and-typecheck:
+    name: Lint and Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint code
+        run: pnpm run lint
+
+      - name: Type check
+        run: pnpm run type-check
+
+  # Unit Tests
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests
+        run: pnpm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          flags: unittests
+          name: codecov-umbrella
+
+  # Build All PWAs
+  build:
+    name: Build PWAs
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test]
+    strategy:
+      matrix:
+        pwa: [public-pwa, admin-pwa, business-pwa, driver-pwa]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build ${{ matrix.pwa }}
+        run: pnpm run build:${{ matrix.pwa }}
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+          NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_WS_URL }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.pwa }}-build
+          path: packages/${{ matrix.pwa }}/.next
+
+  # Build Backend
+  build-backend:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build backend
+        run: pnpm run build:backend
+
+      - name: Upload backend artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-build
+          path: backend/dist
+
+  # E2E Tests
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build, build-backend]
+    services:
+      postgres:
+        image: postgis/postgis:15-3.3
+        env:
+          POSTGRES_DB: delivery_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup test database
+        run: |
+          PGPASSWORD=test_pass psql -h localhost -U test_user -d delivery_test -f database/schema.sql
+        env:
+          PGPASSWORD: test_pass
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e
+        env:
+          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/delivery_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: test_jwt_secret
+          COOKIE_SECRET: test_cookie_secret
+
+  # Security Scan
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level high
+        continue-on-error: true
+
+  # Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.12.x
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: public-pwa-build
+          path: packages/public-pwa/.next
+
+      - name: Run Lighthouse CI
+        run: lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, build-backend, e2e-tests, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: delivery-uae
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build and push backend
+          docker build -f Dockerfile.backend -t $ECR_REGISTRY/$ECR_REPOSITORY-backend:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY-backend:$IMAGE_TAG
+          
+          # Build and push PWAs
+          for pwa in public-pwa admin-pwa business-pwa driver-pwa; do
+            docker build -f Dockerfile.$pwa -t $ECR_REGISTRY/$ECR_REPOSITORY-$pwa:$IMAGE_TAG .
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY-$pwa:$IMAGE_TAG
+          done
+
+      - name: Deploy to EKS Staging
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name delivery-uae-staging
+          kubectl set image deployment/backend backend=${{ steps.login-ecr.outputs.registry }}/delivery-uae-backend:${{ github.sha }} -n staging
+          kubectl set image deployment/public-pwa public-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-public-pwa:${{ github.sha }} -n staging
+          kubectl set image deployment/admin-pwa admin-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-admin-pwa:${{ github.sha }} -n staging
+          kubectl set image deployment/business-pwa business-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-business-pwa:${{ github.sha }} -n staging
+          kubectl set image deployment/driver-pwa driver-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-driver-pwa:${{ github.sha }} -n staging
+
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, build-backend, e2e-tests, security-scan, performance-tests]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: delivery-uae
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Build and push backend
+          docker build -f Dockerfile.backend -t $ECR_REGISTRY/$ECR_REPOSITORY-backend:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY-backend:$IMAGE_TAG
+          
+          # Build and push PWAs
+          for pwa in public-pwa admin-pwa business-pwa driver-pwa; do
+            docker build -f Dockerfile.$pwa -t $ECR_REGISTRY/$ECR_REPOSITORY-$pwa:$IMAGE_TAG .
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY-$pwa:$IMAGE_TAG
+          done
+
+      - name: Deploy to EKS Production
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name delivery-uae-production
+          kubectl set image deployment/backend backend=${{ steps.login-ecr.outputs.registry }}/delivery-uae-backend:${{ github.sha }} -n production
+          kubectl set image deployment/public-pwa public-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-public-pwa:${{ github.sha }} -n production
+          kubectl set image deployment/admin-pwa admin-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-admin-pwa:${{ github.sha }} -n production
+          kubectl set image deployment/business-pwa business-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-business-pwa:${{ github.sha }} -n production
+          kubectl set image deployment/driver-pwa driver-pwa=${{ steps.login-ecr.outputs.registry }}/delivery-uae-driver-pwa:${{ github.sha }} -n production
+
+      - name: Run smoke tests
+        run: |
+          # Wait for deployment to complete
+          kubectl rollout status deployment/backend -n production --timeout=300s
+          kubectl rollout status deployment/public-pwa -n production --timeout=300s
+          kubectl rollout status deployment/admin-pwa -n production --timeout=300s
+          kubectl rollout status deployment/business-pwa -n production --timeout=300s
+          kubectl rollout status deployment/driver-pwa -n production --timeout=300s
+          
+          # Run smoke tests
+          pnpm run test:smoke:production
+
+      - name: Notify deployment
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
