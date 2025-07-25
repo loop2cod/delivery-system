@@ -1,0 +1,77 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ES6"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/shared/*": ["./shared/src/*"],
+      "@/backend/*": ["./backend/src/*"],
+      "@/public-pwa/*": ["./packages/public-pwa/src/*"],
+      "@/admin-pwa/*": ["./packages/admin-pwa/src/*"],
+      "@/business-pwa/*": ["./packages/business-pwa/src/*"],
+      "@/driver-pwa/*": ["./packages/driver-pwa/src/*"],
+      "@delivery-uae/shared": ["./shared/src/index.ts"],
+      "@delivery-uae/shared/*": ["./shared/src/*"]
+    },
+    "types": ["node", "jest", "@types/react", "@types/react-dom"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "shared/src/**/*",
+    "backend/src/**/*",
+    "packages/*/src/**/*",
+    "tests/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "coverage",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ],
+  "references": [
+    {
+      "path": "./shared"
+    },
+    {
+      "path": "./backend"
+    },
+    {
+      "path": "./packages/public-pwa"
+    },
+    {
+      "path": "./packages/admin-pwa"
+    },
+    {
+      "path": "./packages/business-pwa"
+    },
+    {
+      "path": "./packages/driver-pwa"
+    }
+  ]
+}
