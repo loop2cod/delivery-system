@@ -1,4 +1,9 @@
-import fastify from 'fastify';
+/**
+ * UAE Delivery Management System - Backend Server
+ * Main server entry point with Fastify framework
+ */
+
+import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
@@ -10,178 +15,172 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 
 import { config } from './config/environment';
-import { logger, pwaLogger } from './utils/logger';
-import { db } from './config/database';
-import { redis } from './config/redis';
-
-// Route imports
-import { authRoutes } from './routes/auth';
-import { publicRoutes } from './routes/public';
-import { adminRoutes } from './routes/admin';
-import { businessRoutes } from './routes/business';
-import { driverRoutes } from './routes/driver';
-import { webhookRoutes } from './routes/webhooks';
-import { wsHandler } from './routes/websockets';
-// import { qrRoutes } from './routes/qr'; // Temporarily disabled due to shared module issues
-import { gpsTrackingRoutes } from './routes/gps-tracking';
-import metricsRoutes, { trackHttpRequest } from './routes/metrics';
-
-// Middleware imports
-import { authenticateToken } from './middleware/auth';
+import { connectDatabase } from './config/database';
+import { connectRedis } from './config/redis';
+import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
+import { authMiddleware } from './middleware/auth';
 
-const server = fastify({
-  logger: {
-    level: config.LOG_LEVEL
-  },
-  requestTimeout: 30000,
-  bodyLimit: 10485760, // 10MB for file uploads
-});
+// Import routes
+import authRoutes from './routes/auth';
+import publicRoutes from './routes/public';
+import adminRoutes from './routes/admin';
+import businessRoutes from './routes/business';
+import driverRoutes from './routes/driver';
+import qrRoutes from './routes/qr';
+import gpsTrackingRoutes from './routes/gps-tracking';
+import webhookRoutes from './routes/webhooks';
+import websocketRoutes from './routes/websockets';
+import metricsRoutes from './routes/metrics';
 
-async function buildServer() {
-  try {
-    // Register CORS
-    await server.register(cors, {
-      origin: (origin, callback) => {
-        const allowedOrigins = [
-          'http://localhost:3001', // Public PWA
-          'http://localhost:3002', // Admin PWA  
-          'http://localhost:3003', // Business PWA
-          'http://localhost:3004', // Driver PWA
-          'https://deliveryuae.com',
-          'https://admin.deliveryuae.com',
-          'https://business.deliveryuae.com', 
-          'https://driver.deliveryuae.com'
-        ];
-        
-        if (!origin || allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'), false);
-        }
+class DeliveryServer {
+  private server: FastifyInstance;
+
+  constructor() {
+    this.server = Fastify({
+      logger: {
+        level: config.LOG_LEVEL,
+        transport: config.NODE_ENV === 'development' ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'HH:MM:ss Z',
+            ignore: 'pid,hostname',
+          },
+        } : undefined,
       },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+      trustProxy: config.TRUST_PROXY,
+      bodyLimit: 10 * 1024 * 1024, // 10MB
     });
 
-    // Security headers
-    await server.register(helmet, {
+    this.setupPlugins();
+    this.setupRoutes();
+    this.setupErrorHandling();
+  }
+
+  private async setupPlugins(): Promise<void> {
+    // Security plugins
+    await this.server.register(helmet, {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'", "wss:", "ws:"]
-        }
-      }
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'", 'ws:', 'wss:'],
+        },
+      },
+    });
+
+    // CORS configuration
+    await this.server.register(cors, {
+      origin: config.CORS_ORIGINS,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     });
 
     // Rate limiting
-    await server.register(rateLimit, {
-      max: 100,
-      timeWindow: '1 minute',
-      errorResponseBuilder: () => ({
+    await this.server.register(rateLimit, {
+      max: config.RATE_LIMIT_MAX_REQUESTS,
+      timeWindow: config.RATE_LIMIT_WINDOW,
+      errorResponseBuilder: (request, context) => ({
         code: 429,
         error: 'Too Many Requests',
-        message: 'Rate limit exceeded'
-      })
+        message: `Rate limit exceeded, retry in ${Math.round(context.ttl / 1000)} seconds`,
+        expiresIn: Math.round(context.ttl / 1000),
+      }),
     });
 
     // JWT authentication
-    await server.register(jwt, {
+    await this.server.register(jwt, {
       secret: config.JWT_SECRET,
       cookie: {
         cookieName: 'token',
-        signed: false
-      }
+        signed: false,
+      },
     });
 
     // Cookie support
-    await server.register(cookie, {
+    await this.server.register(cookie, {
       secret: config.COOKIE_SECRET,
-      parseOptions: {}
+      parseOptions: {
+        httpOnly: true,
+        secure: config.NODE_ENV === 'production',
+        sameSite: 'strict',
+      },
     });
 
-    // WebSocket support for real-time features
-    await server.register(websocket);
+    // WebSocket support
+    await this.server.register(websocket);
 
     // File upload support
-    await server.register(multipart, {
+    await this.server.register(multipart, {
       limits: {
+        fieldNameSize: 100,
+        fieldSize: 100,
+        fields: 10,
         fileSize: 5 * 1024 * 1024, // 5MB
-        files: 10
-      }
+        files: 5,
+        headerPairs: 2000,
+      },
     });
 
-    // API Documentation
-    await server.register(swagger, {
-      swagger: {
-        info: {
-          title: 'UAE Delivery Management API',
-          description: 'Unified API for all PWA applications',
-          version: '1.0.0'
+    // API documentation
+    if (config.ENABLE_SWAGGER) {
+      await this.server.register(swagger, {
+        swagger: {
+          info: {
+            title: 'UAE Delivery Management API',
+            description: 'Comprehensive API for UAE Delivery Management System',
+            version: '1.0.0',
+            contact: {
+              name: 'UAE Delivery Team',
+              email: 'api@deliveryuae.com',
+            },
+          },
+          host: `${config.API_HOST}:${config.API_PORT}`,
+          schemes: ['http', 'https'],
+          consumes: ['application/json', 'multipart/form-data'],
+          produces: ['application/json'],
+          securityDefinitions: {
+            Bearer: {
+              type: 'apiKey',
+              name: 'Authorization',
+              in: 'header',
+              description: 'Enter: Bearer {token}',
+            },
+          },
+          security: [{ Bearer: [] }],
         },
-        host: `${config.HOST}:${config.PORT}`,
-        schemes: ['http', 'https'],
-        consumes: ['application/json', 'multipart/form-data'],
-        produces: ['application/json'],
-        securityDefinitions: {
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT'
-          }
-        }
-      }
-    });
+      });
 
-    await server.register(swaggerUi, {
-      routePrefix: '/docs',
-      uiConfig: {
-        docExpansion: 'list',
-        deepLinking: false
-      }
-    });
+      await this.server.register(swaggerUi, {
+        routePrefix: '/docs',
+        uiConfig: {
+          docExpansion: 'list',
+          deepLinking: false,
+        },
+        staticCSP: true,
+        transformStaticCSP: (header) => header,
+      });
+    }
 
-    // Global middleware
-    server.addHook('preHandler', requestLogger);
-    server.addHook('preHandler', authenticateToken);
-    
-    // Response logging hook
-    server.addHook('onResponse', async (request, reply) => {
-      const startTime = (request as any).startTime;
-      if (startTime) {
-        const duration = Date.now() - startTime;
-        const { method, url } = request;
-        const statusCode = reply.statusCode;
-        
-        // Log response
-        const level = statusCode >= 400 ? 'warn' : 'info';
-        logger.log(level, `${method} ${url} ${statusCode}`, {
-          requestId: request.id,
-          duration: `${duration}ms`,
-          statusCode,
-          contentLength: reply.getHeader('content-length'),
-          userId: (request as any).user?.id
-        });
+    // Request logging middleware
+    if (config.ENABLE_REQUEST_LOGGING) {
+      this.server.addHook('onRequest', requestLogger);
+    }
 
-        // Track performance metrics
-        if (typeof pwaLogger?.performance === 'function') {
-          pwaLogger.performance(url, method, duration, statusCode);
-        }
+    // Authentication middleware
+    this.server.decorate('authenticate', authMiddleware);
+  }
 
-        // Add performance header
-        reply.header('X-Response-Time', `${duration}ms`);
-      }
-    });
-    
-    server.setErrorHandler(errorHandler);
-
-    // Health check endpoint
-    server.get('/health', {
+  private setupRoutes(): void {
+    // Health check
+    this.server.get('/health', {
       schema: {
+        description: 'Health check endpoint',
         tags: ['Health'],
         response: {
           200: {
@@ -190,142 +189,115 @@ async function buildServer() {
               status: { type: 'string' },
               timestamp: { type: 'string' },
               uptime: { type: 'number' },
-              database: { type: 'string' },
-              redis: { type: 'string' }
-            }
-          }
-        }
-      }
+              version: { type: 'string' },
+            },
+          },
+        },
+      },
     }, async (request, reply) => {
-      const healthCheck = {
+      return {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        database: 'connected',
-        redis: 'connected'
+        version: process.env.npm_package_version || '1.0.0',
       };
-
-      try {
-        // Check database connection
-        await db.query('SELECT 1');
-      } catch (error) {
-        healthCheck.database = 'disconnected';
-        healthCheck.status = 'unhealthy';
-      }
-
-      try {
-        // Check Redis connection
-        if (redis.isAvailable()) {
-          await redis.ping();
-        } else {
-          healthCheck.redis = 'unavailable';
-          // Don't mark as unhealthy in development when Redis is optional
-          if (process.env.NODE_ENV !== 'development') {
-            healthCheck.status = 'unhealthy';
-          }
-        }
-      } catch (error) {
-        healthCheck.redis = 'disconnected';
-        // Don't mark as unhealthy in development when Redis is optional
-        if (process.env.NODE_ENV !== 'development') {
-          healthCheck.status = 'unhealthy';
-        }
-      }
-
-      const statusCode = healthCheck.status === 'healthy' ? 200 : 503;
-      return reply.code(statusCode).send(healthCheck);
     });
 
-    // API Routes
-    await server.register(authRoutes, { prefix: '/api/auth' });
-    await server.register(publicRoutes, { prefix: '/api/public' });
-    await server.register(adminRoutes, { prefix: '/api/admin' });
-    await server.register(businessRoutes, { prefix: '/api/business' });
-    await server.register(driverRoutes, { prefix: '/api/driver' });
-    await server.register(webhookRoutes, { prefix: '/api/webhooks' });
-    // await server.register(qrRoutes, { prefix: '/api' }); // Temporarily disabled
-    await server.register(gpsTrackingRoutes, { prefix: '/api' });
-    await server.register(metricsRoutes);
+    // API routes
+    this.server.register(authRoutes, { prefix: '/api/auth' });
+    this.server.register(publicRoutes, { prefix: '/api/public' });
+    this.server.register(adminRoutes, { prefix: '/api/admin' });
+    this.server.register(businessRoutes, { prefix: '/api/business' });
+    this.server.register(driverRoutes, { prefix: '/api/driver' });
+    this.server.register(qrRoutes, { prefix: '/api/qr' });
+    this.server.register(gpsTrackingRoutes, { prefix: '/api/gps' });
+    this.server.register(webhookRoutes, { prefix: '/api/webhooks' });
+    this.server.register(websocketRoutes, { prefix: '/ws' });
 
-    // WebSocket handler
-    server.register(wsHandler, { prefix: '/ws' });
-
-    // 404 handler
-    server.setNotFoundHandler((request, reply) => {
-      return reply.code(404).send({
-        error: 'Not Found',
-        message: `Route ${request.method}:${request.url} not found`,
-        statusCode: 404
-      });
-    });
-
-    return server;
-  } catch (error) {
-    logger.error('Error building server:', error);
-    throw error;
-  }
-}
-
-async function startServer() {
-  try {
-    // Test database connection
-    await db.query('SELECT NOW()');
-    logger.info('Database connected successfully');
-
-    // Test Redis connection (optional in development)
-    try {
-      if (redis.isAvailable()) {
-        await redis.ping();
-        logger.info('Redis connected successfully');
-      } else {
-        logger.info('Redis not available - running without caching');
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('Redis not available in development - running without caching');
-      } else {
-        throw error;
-      }
+    // Metrics endpoint
+    if (config.ENABLE_METRICS) {
+      this.server.register(metricsRoutes, { prefix: '/metrics' });
     }
 
-    const server = await buildServer();
-    
-    await server.listen({
-      port: config.PORT,
-      host: config.HOST
-    });
-
-    logger.info(`🚀 UAE Delivery Management API Server started`);
-    logger.info(`📋 API Documentation: http://${config.HOST}:${config.PORT}/docs`);
-    logger.info(`🏥 Health Check: http://${config.HOST}:${config.PORT}/health`);
-    logger.info(`🔌 WebSocket: ws://${config.HOST}:${config.PORT}/ws`);
-
-    // Graceful shutdown
-    const signals = ['SIGINT', 'SIGTERM'];
-    signals.forEach((signal) => {
-      process.on(signal, async () => {
-        logger.info(`Received ${signal}, shutting down gracefully`);
-        try {
-          await server.close();
-          await db.end();
-          await redis.quit();
-          process.exit(0);
-        } catch (error) {
-          logger.error('Error during shutdown:', error);
-          process.exit(1);
-        }
+    // 404 handler
+    this.server.setNotFoundHandler((request, reply) => {
+      reply.code(404).send({
+        error: 'Not Found',
+        message: `Route ${request.method}:${request.url} not found`,
+        statusCode: 404,
       });
     });
+  }
 
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
+  private setupErrorHandling(): void {
+    this.server.setErrorHandler(errorHandler);
+
+    // Graceful shutdown
+    const gracefulShutdown = async (signal: string) => {
+      logger.info(`Received ${signal}, shutting down gracefully`);
+      
+      try {
+        await this.server.close();
+        logger.info('Server closed successfully');
+        process.exit(0);
+      } catch (error) {
+        logger.error('Error during shutdown:', error);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      logger.error('Uncaught Exception:', error);
+      process.exit(1);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      process.exit(1);
+    });
+  }
+
+  public async start(): Promise<void> {
+    try {
+      // Connect to database
+      await connectDatabase();
+      logger.info('Database connected successfully');
+
+      // Connect to Redis
+      await connectRedis();
+      logger.info('Redis connected successfully');
+
+      // Start server
+      await this.server.listen({
+        port: config.API_PORT,
+        host: config.API_HOST,
+      });
+
+      logger.info(`Server started on ${config.API_HOST}:${config.API_PORT}`);
+      
+      if (config.ENABLE_SWAGGER) {
+        logger.info(`API Documentation available at http://${config.API_HOST}:${config.API_PORT}/docs`);
+      }
+
+    } catch (error) {
+      logger.error('Failed to start server:', error);
+      process.exit(1);
+    }
+  }
+
+  public getServer(): FastifyInstance {
+    return this.server;
   }
 }
 
 // Start server if this file is run directly
 if (require.main === module) {
-  startServer();
+  const server = new DeliveryServer();
+  server.start();
 }
 
-export { buildServer, startServer };
+export default DeliveryServer;
