@@ -1,10 +1,9 @@
-# Prometheus Configuration
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
 rule_files:
-  - "rules/*.yml"
+  - "alerting-rules.yml"
 
 alerting:
   alertmanagers:
@@ -13,72 +12,74 @@ alerting:
           - alertmanager:9093
 
 scrape_configs:
-  # Prometheus itself
-  - job_name: 'prometheus'
+  # Backend API metrics
+  - job_name: 'delivery-backend'
     static_configs:
-      - targets: ['localhost:9090']
-
-  # Backend API monitoring
-  - job_name: 'backend-api'
-    static_configs:
-      - targets: ['backend:3001']
+      - targets: ['backend:4000']
     metrics_path: '/metrics'
     scrape_interval: 10s
-    scrape_timeout: 5s
 
-  # PWA applications monitoring
-  - job_name: 'public-pwa'
+  # PWA metrics
+  - job_name: 'delivery-public-pwa'
     static_configs:
-      - targets: ['public-pwa:3000']
+      - targets: ['public-pwa:3001']
     metrics_path: '/api/metrics'
     scrape_interval: 30s
 
-  - job_name: 'admin-pwa'
+  - job_name: 'delivery-admin-pwa'
     static_configs:
       - targets: ['admin-pwa:3002']
     metrics_path: '/api/metrics'
     scrape_interval: 30s
 
-  - job_name: 'business-pwa'
+  - job_name: 'delivery-business-pwa'
     static_configs:
       - targets: ['business-pwa:3003']
     metrics_path: '/api/metrics'
     scrape_interval: 30s
 
-  - job_name: 'driver-pwa'
+  - job_name: 'delivery-driver-pwa'
     static_configs:
       - targets: ['driver-pwa:3004']
     metrics_path: '/api/metrics'
     scrape_interval: 30s
 
-  # Database monitoring
+  # Database metrics
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres-exporter:9187']
-    scrape_interval: 30s
 
+  # Redis metrics
   - job_name: 'redis'
     static_configs:
       - targets: ['redis-exporter:9121']
-    scrape_interval: 30s
 
-  # Nginx monitoring
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Nginx metrics
   - job_name: 'nginx'
     static_configs:
       - targets: ['nginx-exporter:9113']
-    scrape_interval: 30s
 
-  # Node exporter for system metrics
-  - job_name: 'node-exporter'
+  # Blackbox exporter for endpoint monitoring
+  - job_name: 'blackbox'
     static_configs:
-      - targets: ['node-exporter:9100']
-    scrape_interval: 30s
-
-  # Application-specific metrics
-  - job_name: 'delivery-metrics'
-    static_configs:
-      - targets: ['backend:3001']
-    metrics_path: '/api/metrics/custom'
-    scrape_interval: 15s
+      - targets:
+        - http://public-pwa:3001
+        - http://admin-pwa:3002
+        - http://business-pwa:3003
+        - http://driver-pwa:3004
+        - http://backend:4000/health
+    metrics_path: /probe
     params:
-      format: ['prometheus']
+      module: [http_2xx]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
