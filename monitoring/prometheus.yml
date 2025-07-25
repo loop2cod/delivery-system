@@ -1,0 +1,84 @@
+# Prometheus Configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Backend API monitoring
+  - job_name: 'backend-api'
+    static_configs:
+      - targets: ['backend:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # PWA applications monitoring
+  - job_name: 'public-pwa'
+    static_configs:
+      - targets: ['public-pwa:3000']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'admin-pwa'
+    static_configs:
+      - targets: ['admin-pwa:3002']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'business-pwa'
+    static_configs:
+      - targets: ['business-pwa:3003']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'driver-pwa'
+    static_configs:
+      - targets: ['driver-pwa:3004']
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+
+  # Database monitoring
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # Nginx monitoring
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+
+  # Node exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # Application-specific metrics
+  - job_name: 'delivery-metrics'
+    static_configs:
+      - targets: ['backend:3001']
+    metrics_path: '/api/metrics/custom'
+    scrape_interval: 15s
+    params:
+      format: ['prometheus']

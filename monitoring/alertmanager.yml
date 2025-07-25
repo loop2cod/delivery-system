@@ -1,0 +1,150 @@
+# Alertmanager Configuration
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@delivery-system.ae'
+  smtp_auth_username: 'alerts@delivery-system.ae'
+  smtp_auth_password: 'your-smtp-password'
+
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 24h
+  receiver: 'delivery-team'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+    
+    - match:
+        team: devops
+      receiver: 'devops-team'
+    
+    - match:
+        team: backend
+      receiver: 'backend-team'
+    
+    - match:
+        team: frontend
+      receiver: 'frontend-team'
+    
+    - match:
+        team: mobile
+      receiver: 'mobile-team'
+    
+    - match:
+        team: operations
+      receiver: 'operations-team'
+
+receivers:
+  - name: 'delivery-team'
+    email_configs:
+      - to: 'team@delivery-system.ae'
+        subject: '[DELIVERY-SYSTEM] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          {{ end }}
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'critical@delivery-system.ae'
+        subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 CRITICAL ALERT 🚨
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#critical-alerts'
+        title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Instance:* {{ .Labels.instance }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+
+  - name: 'devops-team'
+    email_configs:
+      - to: 'devops@delivery-system.ae'
+        subject: '[DEVOPS] {{ .GroupLabels.alertname }}'
+        body: |
+          DevOps Alert
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'backend-team'
+    email_configs:
+      - to: 'backend@delivery-system.ae'
+        subject: '[BACKEND] {{ .GroupLabels.alertname }}'
+        body: |
+          Backend Alert
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'frontend-team'
+    email_configs:
+      - to: 'frontend@delivery-system.ae'
+        subject: '[FRONTEND] {{ .GroupLabels.alertname }}'
+        body: |
+          Frontend/PWA Alert
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'mobile-team'
+    email_configs:
+      - to: 'mobile@delivery-system.ae'
+        subject: '[MOBILE] {{ .GroupLabels.alertname }}'
+        body: |
+          Mobile/GPS Alert
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+  - name: 'operations-team'
+    email_configs:
+      - to: 'operations@delivery-system.ae'
+        subject: '[OPERATIONS] {{ .GroupLabels.alertname }}'
+        body: |
+          Operations Alert
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']

@@ -1,0 +1,59 @@
+# Backend API Dockerfile
+FROM node:18-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files
+COPY backend/package*.json ./
+COPY package*.json ./
+COPY pnpm-workspace.yaml ./
+
+# Install dependencies
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY backend ./backend
+COPY shared ./shared
+COPY package*.json ./
+COPY pnpm-workspace.yaml ./
+
+# Install pnpm and build the application
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+RUN cd backend && pnpm run build
+
+# Production image, copy all the files and run next
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 fastify
+
+# Copy built application
+COPY --from=builder --chown=fastify:nodejs /app/backend/dist ./dist
+COPY --from=builder --chown=fastify:nodejs /app/backend/package*.json ./
+COPY --from=builder --chown=fastify:nodejs /app/node_modules ./node_modules
+
+# Copy migration files
+COPY --from=builder --chown=fastify:nodejs /app/backend/migrations ./migrations
+
+USER fastify
+
+EXPOSE 3001
+
+ENV PORT 3001
+ENV HOST 0.0.0.0
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
+
+CMD ["node", "dist/server.js"]

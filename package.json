@@ -1,0 +1,58 @@
+{
+  "name": "uae-delivery-management-system",
+  "version": "1.0.0",
+  "description": "Comprehensive UAE Delivery Management System with 4 Progressive Web Applications",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:integration": "jest --config=jest.integration.config.js",
+    "test:e2e": "playwright test",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean",
+    "dev:public": "pnpm --filter public-pwa run dev",
+    "dev:admin": "pnpm --filter admin-pwa run dev",
+    "dev:business": "pnpm --filter business-pwa run dev",
+    "dev:driver": "pnpm --filter driver-pwa run dev",
+    "dev:backend": "pnpm --filter backend run dev",
+    "build:all": "pnpm run build",
+    "start:prod": "docker-compose up -d",
+    "start:dev": "docker-compose -f docker-compose.dev.yml up -d",
+    "stop:dev": "docker-compose -f docker-compose.dev.yml down",
+    "logs": "docker-compose logs -f",
+    "db:migrate": "pnpm --filter backend run migrate",
+    "db:seed": "pnpm --filter backend run seed",
+    "docker:build": "docker-compose build",
+    "docker:push": "docker-compose push",
+    "security:scan": "npm audit && pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json",
+    "performance:lighthouse": "lighthouse-ci autorun",
+    "deploy:staging": "kubectl apply -f k8s/staging/",
+    "deploy:production": "kubectl apply -f k8s/production/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "eslint": "^8.0.0",
+    "prettier": "^3.0.0",
+    "turbo": "^1.10.16",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.6.10",
+  "dependencies": {
+    "@tailwindcss/aspect-ratio": "^0.4.2",
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.16",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.0"
+  }
+}

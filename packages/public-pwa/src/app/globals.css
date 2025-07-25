@@ -1,0 +1,340 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* UAE Brand CSS Variables */
+:root {
+  /* Primary Brand Colors */
+  --uae-navy: #142C4F;
+  --uae-red: #C32C3C;
+  --uae-light: #EFEFEF;
+  
+  /* PWA-Specific Color Mappings */
+  --primary: var(--uae-navy);
+  --primary-foreground: #ffffff;
+  --secondary: var(--uae-light);
+  --secondary-foreground: var(--uae-navy);
+  --accent: var(--uae-red);
+  --accent-foreground: #ffffff;
+  
+  /* Semantic Colors */
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #f59e0b;
+  --warning-foreground: #ffffff;
+  --destructive: var(--uae-red);
+  --destructive-foreground: #ffffff;
+  
+  /* PWA UI Colors */
+  --background: #ffffff;
+  --foreground: var(--uae-navy);
+  --card: #ffffff;
+  --card-foreground: var(--uae-navy);
+  --popover: #ffffff;
+  --popover-foreground: var(--uae-navy);
+  --muted: var(--uae-light);
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --input: #f9fafb;
+  --ring: var(--uae-navy);
+  --radius: 0.75rem;
+  
+  /* PWA Specific Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--uae-navy) 0%, #1e3a8a 100%);
+  --gradient-accent: linear-gradient(135deg, var(--uae-red) 0%, #dc2626 100%);
+  --gradient-success: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+}
+
+/* Dark Mode Theme */
+.dark {
+  --background: #0f172a;
+  --foreground: var(--uae-light);
+  --card: #1e293b;
+  --card-foreground: var(--uae-light);
+  --popover: #1e293b;
+  --popover-foreground: var(--uae-light);
+  --primary: var(--uae-navy);
+  --primary-foreground: #ffffff;
+  --secondary: #334155;
+  --secondary-foreground: var(--uae-light);
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: var(--uae-red);
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: var(--uae-light);
+  --border: #334155;
+  --input: #334155;
+  --ring: var(--uae-red);
+}
+
+/* Public PWA Theme */
+.public-pwa-theme {
+  --app-primary: var(--uae-navy);
+  --app-accent: var(--uae-red);
+  --app-background: #ffffff;
+  --hero-gradient: var(--gradient-primary);
+  --cta-gradient: var(--gradient-accent);
+  --section-bg: var(--uae-light);
+  --card-shadow: 0 10px 25px -5px rgb(20 44 79 / 0.15);
+  --hover-transform: translateY(-8px);
+}
+
+/* Base Styles */
+* {
+  border-color: #e5e7eb;
+}
+
+body {
+  @apply bg-white text-gray-900;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Typography */
+.gradient-text {
+  background: var(--gradient-primary);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Buttons */
+.btn-primary {
+  @apply bg-gradient-to-r from-primary to-primary/90 text-white;
+  @apply shadow-lg hover:shadow-xl transform hover:scale-105;
+  @apply transition-all duration-200 ease-in-out;
+  @apply border-0 rounded-xl px-6 py-3 font-semibold;
+}
+
+.btn-accent {
+  @apply bg-gradient-to-r from-accent to-accent/90 text-white;
+  @apply shadow-lg hover:shadow-xl transform hover:scale-105;
+  @apply transition-all duration-200 ease-in-out;
+  @apply border-0 rounded-xl px-6 py-3 font-semibold;
+}
+
+.btn-outline {
+  @apply border-2 border-primary text-primary bg-transparent;
+  @apply hover:bg-primary hover:text-white;
+  @apply transition-all duration-200 ease-in-out;
+  @apply rounded-xl px-6 py-3 font-semibold;
+}
+
+/* Cards */
+.card-hover {
+  @apply bg-white border border-gray-200 rounded-2xl p-6;
+  @apply shadow-uae hover:shadow-accent hover-lift;
+  @apply transition-all duration-300 ease-out;
+}
+
+.glass-card {
+  @apply backdrop-blur-lg bg-white/80 border border-white/20;
+  @apply rounded-2xl p-6 shadow-xl;
+}
+
+/* Forms */
+.form-input {
+  @apply w-full px-4 py-3 rounded-xl border border-gray-300;
+  @apply bg-gray-50 text-gray-900 placeholder:text-gray-500;
+  @apply focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.form-textarea {
+  @apply form-input min-h-[120px] resize-y;
+}
+
+.form-select {
+  @apply form-input pr-10 appearance-none cursor-pointer;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+
+.form-label {
+  @apply block text-sm font-semibold text-gray-900 mb-2;
+}
+
+.form-error {
+  @apply text-red-600 text-sm mt-1;
+}
+
+/* Navigation */
+.nav-link {
+  @apply text-foreground/80 hover:text-foreground;
+  @apply transition-colors duration-200 ease-in-out;
+  @apply font-medium;
+}
+
+.nav-link.active {
+  @apply text-primary font-semibold;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    border-color: rgb(20 44 79 / 0.2);
+  }
+  50% {
+    border-color: rgb(20 44 79 / 0.8);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.4s ease-out;
+}
+
+.animate-pulse-border {
+  animation: pulse-border 2s infinite;
+}
+
+/* PWA-specific styles */
+.pwa-install-prompt {
+  @apply fixed bottom-4 left-4 right-4 z-50;
+  @apply bg-white border border-gray-200 rounded-2xl p-4 shadow-2xl;
+  @apply animate-bounce;
+}
+
+.offline-indicator {
+  @apply fixed top-0 left-0 right-0 z-50;
+  @apply bg-yellow-500 text-white px-4 py-2;
+  @apply text-center text-sm font-medium;
+  @apply transform transition-transform duration-300;
+}
+
+.offline-indicator.hidden {
+  @apply -translate-y-full;
+}
+
+.offline-indicator.visible {
+  @apply translate-y-0;
+}
+
+/* Loading states */
+.skeleton {
+  @apply animate-pulse bg-muted rounded;
+}
+
+.loading-spinner {
+  @apply animate-spin rounded-full border-2 border-muted border-t-primary;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .mobile-padding {
+    @apply px-4 py-2;
+  }
+  
+  .mobile-text {
+    @apply text-sm;
+  }
+  
+  .mobile-button {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* Touch-friendly interactions */
+@media (hover: none) and (pointer: coarse) {
+  .hover-lift:hover {
+    transform: none;
+  }
+  
+  .mobile-button:active {
+    @apply scale-95;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --border: #000000;
+    --ring: #000000;
+  }
+  
+  .dark {
+    --border: #ffffff;
+    --ring: #ffffff;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .hover-lift {
+    transition: none;
+  }
+  
+  .hover-lift:hover {
+    transform: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  * {
+    @apply text-black bg-white;
+  }
+}
+
+/* Focus styles for accessibility */
+.focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}

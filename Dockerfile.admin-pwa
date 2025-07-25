@@ -1,0 +1,66 @@
+# Admin PWA Dockerfile
+FROM node:18-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY pnpm-workspace.yaml ./
+COPY packages/admin-pwa/package*.json ./packages/admin-pwa/
+COPY shared/package*.json ./shared/
+
+# Install dependencies
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/admin-pwa/node_modules ./packages/admin-pwa/node_modules
+COPY --from=deps /app/shared/node_modules ./shared/node_modules
+
+COPY packages/admin-pwa ./packages/admin-pwa
+COPY shared ./shared
+COPY package*.json ./
+COPY pnpm-workspace.yaml ./
+
+# Install pnpm and build
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+
+# Build shared library first
+RUN cd shared && pnpm run build
+
+# Build the admin PWA
+RUN cd packages/admin-pwa && pnpm run build
+
+# Production image, copy all the files and run next
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy built application
+COPY --from=builder /app/packages/admin-pwa/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/packages/admin-pwa/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/packages/admin-pwa/.next/static ./.next/static
+
+USER nextjs
+
+EXPOSE 3002
+
+ENV PORT 3002
+ENV HOSTNAME "0.0.0.0"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3002/api/health || exit 1
+
+CMD ["node", "server.js"]

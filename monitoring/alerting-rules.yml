@@ -1,0 +1,160 @@
+# Prometheus Alerting Rules for UAE Delivery Management System
+groups:
+  - name: delivery-system-alerts
+    rules:
+      # Service availability alerts
+      - alert: ServiceDown
+        expr: up{job=~".*pwa.*|backend-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 2 minutes"
+
+      # Performance alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="backend-api"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="backend-api",status=~"5.."}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors/sec for more than 3 minutes"
+
+      # Database alerts
+      - alert: DatabaseConnectionsHigh
+        expr: postgres_stat_database_numbackends{datname="delivery_management"} > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "High database connections"
+          description: "Database has {{ $value }} active connections"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+
+      # PWA performance alerts
+      - alert: LowPWAPerformanceScore
+        expr: lighthouse_performance_score < 0.8
+        for: 2m
+        labels:
+          severity: warning
+          team: frontend
+        annotations:
+          summary: "Low PWA performance score"
+          description: "{{ $labels.url }} has performance score of {{ $value }}"
+
+      - alert: HighWebVitalsCLS
+        expr: web_vital_cls > 0.25
+        for: 1m
+        labels:
+          severity: warning
+          team: frontend
+        annotations:
+          summary: "High Cumulative Layout Shift"
+          description: "CLS score is {{ $value }} on {{ $labels.page }}"
+
+      - alert: HighWebVitalsLCP
+        expr: web_vital_lcp > 4000
+        for: 1m
+        labels:
+          severity: warning
+          team: frontend
+        annotations:
+          summary: "High Largest Contentful Paint"
+          description: "LCP is {{ $value }}ms on {{ $labels.page }}"
+
+      # GPS tracking alerts
+      - alert: LowGPSAccuracy
+        expr: gps_tracking_accuracy_meters > 10
+        for: 5m
+        labels:
+          severity: warning
+          team: mobile
+        annotations:
+          summary: "Low GPS tracking accuracy"
+          description: "GPS accuracy is {{ $value }} meters"
+
+      - alert: GPSTrackingDown
+        expr: rate(gps_location_updates_total[5m]) == 0
+        for: 10m
+        labels:
+          severity: critical
+          team: mobile
+        annotations:
+          summary: "GPS tracking stopped"
+          description: "No GPS location updates received for 10 minutes"
+
+      # Business metrics alerts
+      - alert: LowDeliverySuccessRate
+        expr: delivery_success_rate < 0.9
+        for: 15m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "Low delivery success rate"
+          description: "Delivery success rate is {{ $value | humanizePercentage }}"
+
+      - alert: HighOrderBacklog
+        expr: delivery_orders_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+          team: operations
+        annotations:
+          summary: "High order backlog"
+          description: "{{ $value }} orders are pending delivery"
+
+      # System resource alerts
+      - alert: HighCPUUsage
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          team: devops
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 2m
+        labels:
+          severity: critical
+          team: devops
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value | humanizePercentage }} full"

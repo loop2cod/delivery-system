@@ -1,0 +1,346 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --primary: 214 78% 20%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 354 84% 48%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 214 78% 20%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 0 0% 98%;
+    --primary: 214 78% 20%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 354 84% 48%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 214 78% 20%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  html {
+    @apply h-full;
+  }
+  
+  body {
+    @apply h-full overflow-x-hidden;
+  }
+}
+
+/* Mobile-first responsive design */
+@screen sm {
+  .mobile-only {
+    @apply hidden;
+  }
+}
+
+.mobile-only {
+  @apply block;
+}
+
+/* Touch-friendly elements */
+.touch-target {
+  @apply min-h-[44px] min-w-[44px];
+}
+
+/* GPS and location styles */
+.location-marker {
+  @apply w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-lg;
+}
+
+.location-pulse {
+  animation: pulse-location 2s infinite;
+}
+
+@keyframes pulse-location {
+  0% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+  }
+}
+
+/* QR Scanner styles */
+.qr-scanner-container {
+  @apply relative w-full h-64 bg-black rounded-lg overflow-hidden;
+}
+
+.qr-scanner-overlay {
+  @apply absolute inset-0 flex items-center justify-center;
+}
+
+.qr-scanner-frame {
+  @apply w-48 h-48 border-2 border-white rounded-lg;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
+
+.qr-scanner-corners {
+  @apply absolute w-6 h-6;
+}
+
+.qr-scanner-corners::before,
+.qr-scanner-corners::after {
+  content: '';
+  @apply absolute bg-white;
+}
+
+.qr-scanner-corners.top-left {
+  @apply top-0 left-0;
+}
+
+.qr-scanner-corners.top-left::before {
+  @apply top-0 left-0 w-6 h-1;
+}
+
+.qr-scanner-corners.top-left::after {
+  @apply top-0 left-0 w-1 h-6;
+}
+
+.qr-scanner-corners.top-right {
+  @apply top-0 right-0;
+}
+
+.qr-scanner-corners.top-right::before {
+  @apply top-0 right-0 w-6 h-1;
+}
+
+.qr-scanner-corners.top-right::after {
+  @apply top-0 right-0 w-1 h-6;
+}
+
+.qr-scanner-corners.bottom-left {
+  @apply bottom-0 left-0;
+}
+
+.qr-scanner-corners.bottom-left::before {
+  @apply bottom-0 left-0 w-6 h-1;
+}
+
+.qr-scanner-corners.bottom-left::after {
+  @apply bottom-0 left-0 w-1 h-6;
+}
+
+.qr-scanner-corners.bottom-right {
+  @apply bottom-0 right-0;
+}
+
+.qr-scanner-corners.bottom-right::before {
+  @apply bottom-0 right-0 w-6 h-1;
+}
+
+.qr-scanner-corners.bottom-right::after {
+  @apply bottom-0 right-0 w-1 h-6;
+}
+
+/* Status indicators */
+.status-indicator {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-available {
+  @apply bg-green-100 text-green-800;
+}
+
+.status-busy {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.status-offline {
+  @apply bg-gray-100 text-gray-800;
+}
+
+.status-on-delivery {
+  @apply bg-blue-100 text-blue-800;
+}
+
+/* Delivery card styles */
+.delivery-card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4;
+}
+
+.delivery-card.active {
+  @apply border-primary shadow-md;
+}
+
+.delivery-card.completed {
+  @apply bg-green-50 border-green-200;
+}
+
+/* Navigation styles */
+.route-progress {
+  @apply w-full bg-gray-200 rounded-full h-2;
+}
+
+.route-progress-bar {
+  @apply bg-primary h-2 rounded-full transition-all duration-300;
+}
+
+/* Photo capture styles */
+.photo-capture-container {
+  @apply relative w-full aspect-square bg-gray-100 rounded-lg overflow-hidden;
+}
+
+.photo-capture-overlay {
+  @apply absolute inset-0 flex items-center justify-center bg-black bg-opacity-50;
+}
+
+/* Offline indicator */
+.offline-indicator {
+  @apply fixed top-0 left-0 right-0 bg-red-500 text-white text-center py-2 text-sm font-medium z-50;
+}
+
+/* Loading states */
+.loading-skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+.loading-dots {
+  @apply inline-flex space-x-1;
+}
+
+.loading-dots span {
+  @apply w-2 h-2 bg-current rounded-full animate-bounce;
+}
+
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+/* Button styles */
+.btn-primary {
+  @apply bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 touch-target;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 text-gray-900 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 touch-target;
+}
+
+.btn-success {
+  @apply bg-green-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 touch-target;
+}
+
+.btn-danger {
+  @apply bg-red-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 touch-target;
+}
+
+.btn-floating {
+  @apply fixed bottom-6 right-6 w-14 h-14 bg-primary text-white rounded-full shadow-lg hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 flex items-center justify-center z-40;
+}
+
+/* Map styles */
+.map-container {
+  @apply w-full h-64 rounded-lg overflow-hidden;
+}
+
+.map-fullscreen {
+  @apply fixed inset-0 z-50;
+}
+
+/* Animation utilities */
+.slide-up-enter {
+  @apply transform translate-y-full;
+}
+
+.slide-up-enter-active {
+  @apply transform translate-y-0 transition-transform duration-300 ease-out;
+}
+
+.slide-up-exit {
+  @apply transform translate-y-0;
+}
+
+.slide-up-exit-active {
+  @apply transform translate-y-full transition-transform duration-300 ease-in;
+}
+
+.bounce-in {
+  animation: bounceIn 0.6s ease-out;
+}
+
+@keyframes bounceIn {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Dark mode adjustments for mobile */
+@media (prefers-color-scheme: dark) {
+  .qr-scanner-frame {
+    @apply border-gray-300;
+  }
+  
+  .delivery-card {
+    @apply bg-gray-800 border-gray-700;
+  }
+  
+  .loading-skeleton {
+    @apply bg-gray-700;
+  }
+}

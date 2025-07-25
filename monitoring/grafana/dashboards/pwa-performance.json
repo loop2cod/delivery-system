@@ -1,0 +1,268 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "PWA Performance Dashboard",
+    "tags": ["pwa", "performance", "web-vitals"],
+    "timezone": "Asia/Dubai",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Web Vitals Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(web_vital_lcp)",
+            "legendFormat": "LCP (ms)"
+          },
+          {
+            "expr": "avg(web_vital_fid)",
+            "legendFormat": "FID (ms)"
+          },
+          {
+            "expr": "avg(web_vital_cls)",
+            "legendFormat": "CLS"
+          },
+          {
+            "expr": "avg(web_vital_fcp)",
+            "legendFormat": "FCP (ms)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.25}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Largest Contentful Paint (LCP) Trends",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.75, rate(web_vital_lcp_bucket[5m]))",
+            "legendFormat": "75th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.90, rate(web_vital_lcp_bucket[5m]))",
+            "legendFormat": "90th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(web_vital_lcp_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Time (ms)",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 3,
+        "title": "Cumulative Layout Shift (CLS) Distribution",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(web_vital_cls_bucket{rating=\"good\"}[5m])",
+            "legendFormat": "Good (≤0.1)"
+          },
+          {
+            "expr": "rate(web_vital_cls_bucket{rating=\"needs-improvement\"}[5m])",
+            "legendFormat": "Needs Improvement (0.1-0.25)"
+          },
+          {
+            "expr": "rate(web_vital_cls_bucket{rating=\"poor\"}[5m])",
+            "legendFormat": "Poor (>0.25)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "First Input Delay (FID) by Page",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "avg by (page) (web_vital_fid)",
+            "legendFormat": "{{page}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 5,
+        "title": "Page Load Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg by (page) (page_load_time)",
+            "legendFormat": "{{page}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Time (ms)",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "Resource Loading Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg by (resource_type) (resource_load_time)",
+            "legendFormat": "{{resource_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 7,
+        "title": "PWA Features Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "service_worker_status",
+            "legendFormat": "Service Worker Active"
+          },
+          {
+            "expr": "avg(storage_usage) / avg(storage_quota)",
+            "legendFormat": "Storage Usage %"
+          },
+          {
+            "expr": "rate(feature_usage[5m])",
+            "legendFormat": "Feature Usage Rate"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "User Interactions",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(user_interaction[5m])",
+            "legendFormat": "{{action}} on {{element}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 9,
+        "title": "JavaScript Errors",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(javascript_error[5m])",
+            "legendFormat": "{{error_name}} on {{page}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      },
+      {
+        "id": 10,
+        "title": "Network Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "avg(network_downlink)",
+            "legendFormat": "Downlink Speed (Mbps)"
+          },
+          {
+            "expr": "avg(network_rtt)",
+            "legendFormat": "RTT (ms)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40}
+      },
+      {
+        "id": 11,
+        "title": "API Call Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(api_call_duration_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(api_call_duration_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Duration (ms)",
+            "min": 0
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40}
+      },
+      {
+        "id": 12,
+        "title": "Form Submission Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(form_submission{status=\"success\"}[5m]) / rate(form_submission[5m])",
+            "legendFormat": "Success Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 0.8},
+                {"color": "green", "value": 0.95}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48}
+      },
+      {
+        "id": 13,
+        "title": "Connectivity Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(connectivity_change)",
+            "legendFormat": "Online Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 48}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+}
