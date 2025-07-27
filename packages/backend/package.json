@@ -1,5 +1,5 @@
 {
-  "name": "@delivery-uae/backend",
+  "name": "@delivery-system/backend",
   "version": "1.0.0",
   "description": "Backend API for UAE Delivery Management System",
   "main": "dist/server.js",
@@ -35,7 +35,7 @@
     "jsqr": "^1.4.0",
     "canvas": "^2.11.2",
     "prom-client": "^15.1.0",
-    "@delivery-uae/shared": "workspace:*"
+    "@delivery-system/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.8.7",
