@@ -1288,6 +1288,283 @@ export async function adminRoutes(fastify: FastifyInstance) {
       updated_inquiries: updatedInquiriesResult.rows
     };
   }));
+
+  // Staff Management Endpoints
+  
+  // Get all staff members
+  fastify.get('/staff', asyncHandler(async (request, reply) => {
+    const { page = 1, limit = 20, search = '', role = '' } = request.query as any;
+    
+    const skip = (page - 1) * limit;
+    const filter: any = {
+      role: { $in: ['STAFF', 'ADMIN', 'SUPER_ADMIN'] }
+    };
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (role) {
+      filter.role = role;
+    }
+
+    const staff = await db.findMany('users', filter, {
+      skip,
+      limit: parseInt(limit),
+      sort: { created_at: -1 }
+    });
+
+    const total = await db.count('users', filter);
+
+    // Convert to frontend format
+    const formattedStaff = staff.map(convertMongoDocToFrontend);
+
+    return {
+      staff: formattedStaff,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    };
+  }));
+
+  // Create new staff member
+  fastify.post('/staff', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'email', 'password', 'role'],
+        properties: {
+          name: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', minLength: 8 },
+          role: { type: 'string', enum: ['STAFF', 'ADMIN'] },
+          permissions: {
+            type: 'object',
+            properties: {
+              dashboard: { type: 'boolean' },
+              companies: { type: 'boolean' },
+              drivers: { type: 'boolean' },
+              inquiries: { type: 'boolean' },
+              qr_management: { type: 'boolean' },
+              settings: { type: 'boolean' }
+            }
+          }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { name, email, password, role, permissions } = request.body as any;
+
+    // Check if email already exists
+    const existingUser = await db.findOne('users', { email: email.toLowerCase() });
+    if (existingUser) {
+      return reply.code(409).send({ error: 'Email already in use' });
+    }
+
+    // Hash password
+    const password_hash = await bcrypt.hash(password, 10);
+
+    // Default permissions based on role
+    const defaultPermissions = {
+      dashboard: true,
+      companies: role === 'ADMIN',
+      drivers: role === 'ADMIN',
+      inquiries: role === 'ADMIN',
+      qr_management: true,
+      settings: role === 'ADMIN'
+    };
+
+    const staffData = {
+      name,
+      email: email.toLowerCase(),
+      password_hash,
+      role,
+      permissions: permissions || defaultPermissions,
+      status: 'ACTIVE',
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+
+    const newStaff = await db.insertOne('users', staffData);
+
+    return {
+      message: 'Staff member created successfully',
+      staff: convertMongoDocToFrontend(newStaff)
+    };
+  }));
+
+  // Get single staff member
+  fastify.get('/staff/:id', asyncHandler(async (request, reply) => {
+    const { id } = request.params as any;
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid staff ID' });
+    }
+
+    const staff = await db.findOne('users', { _id: new ObjectId(id) });
+
+    if (!staff) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    return {
+      staff: convertMongoDocToFrontend(staff)
+    };
+  }));
+
+  // Update staff member
+  fastify.put('/staff/:id', {
+    schema: {
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          role: { type: 'string', enum: ['STAFF', 'ADMIN'] },
+          status: { type: 'string', enum: ['ACTIVE', 'INACTIVE'] },
+          permissions: {
+            type: 'object',
+            properties: {
+              dashboard: { type: 'boolean' },
+              companies: { type: 'boolean' },
+              drivers: { type: 'boolean' },
+              inquiries: { type: 'boolean' },
+              qr_management: { type: 'boolean' },
+              settings: { type: 'boolean' }
+            }
+          }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as any;
+    const updates = request.body as any;
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid staff ID' });
+    }
+
+    // Prevent editing super admin
+    const existingStaff = await db.findOne('users', { _id: new ObjectId(id) });
+    if (!existingStaff) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    if (existingStaff.role === 'SUPER_ADMIN') {
+      return reply.code(403).send({ error: 'Cannot edit super admin account' });
+    }
+
+    // Check email uniqueness if email is being updated
+    if (updates.email && updates.email !== existingStaff.email) {
+      const emailExists = await db.findOne('users', { 
+        email: updates.email.toLowerCase(),
+        _id: { $ne: new ObjectId(id) }
+      });
+      
+      if (emailExists) {
+        return reply.code(409).send({ error: 'Email already in use' });
+      }
+    }
+
+    const updateData = {
+      ...updates,
+      updated_at: new Date()
+    };
+
+    if (updates.email) {
+      updateData.email = updates.email.toLowerCase();
+    }
+
+    const updatedStaff = await db.updateOne('users', 
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    if (!updatedStaff) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    return {
+      message: 'Staff member updated successfully',
+      staff: convertMongoDocToFrontend(updatedStaff)
+    };
+  }));
+
+  // Delete staff member
+  fastify.delete('/staff/:id', asyncHandler(async (request, reply) => {
+    const { id } = request.params as any;
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid staff ID' });
+    }
+
+    // Check if it's a super admin
+    const staff = await db.findOne('users', { _id: new ObjectId(id) });
+    if (!staff) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    if (staff.role === 'SUPER_ADMIN') {
+      return reply.code(403).send({ error: 'Cannot delete super admin account' });
+    }
+
+    const deleted = await db.deleteOne('users', { _id: new ObjectId(id) });
+
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    return {
+      message: 'Staff member deleted successfully'
+    };
+  }));
+
+  // Reset staff password
+  fastify.post('/staff/:id/reset-password', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['newPassword'],
+        properties: {
+          newPassword: { type: 'string', minLength: 8 }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as any;
+    const { newPassword } = request.body as any;
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid staff ID' });
+    }
+
+    // Hash new password
+    const password_hash = await bcrypt.hash(newPassword, 10);
+
+    const updatedStaff = await db.updateOne('users',
+      { _id: new ObjectId(id) },
+      { 
+        $set: { 
+          password_hash,
+          updated_at: new Date()
+        }
+      }
+    );
+
+    if (!updatedStaff) {
+      return reply.code(404).send({ error: 'Staff member not found' });
+    }
+
+    return {
+      message: 'Password reset successfully'
+    };
+  }));
 }
 
 export default adminRoutes;

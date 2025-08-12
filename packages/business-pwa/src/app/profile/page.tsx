@@ -91,7 +91,7 @@ const INDUSTRIES = [
 ];
 
 export default function ProfilePage() {
-  const { user } = useBusiness();
+  const { } = useBusiness();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);

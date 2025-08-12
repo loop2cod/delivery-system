@@ -235,6 +235,41 @@ export function requireRoles(...roles: UserRole[]) {
 }
 
 /**
+ * Require specific admin panel section permission
+ */
+export function requireSectionPermission(section: string) {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required'
+      });
+    }
+
+    // Super admins have access to everything
+    if (request.user.role === UserRole.SUPER_ADMIN) {
+      return;
+    }
+
+    // Check if user has permission for this section
+    const user = await User.findById(request.user.id).select('permissions');
+    if (!user || !user.permissions || !user.permissions[section]) {
+      logger.warn('Section permission violation', {
+        userId: request.user.id,
+        userRole: request.user.role,
+        requiredSection: section,
+        route: request.url
+      });
+
+      return reply.code(403).send({
+        error: 'Forbidden',
+        message: `Access denied to ${section} section`
+      });
+    }
+  };
+}
+
+/**
  * Require company ownership middleware
  */
 export function requireCompanyOwnership() {
