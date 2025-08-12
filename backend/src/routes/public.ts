@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { InquiryStatus, Emirate, PackageStatus } from '@delivery-uae/shared';
+import { InquiryStatus } from '../models/Inquiry';
+import { Emirate, PackageStatus } from '../utils/helpers';
 import { db } from '../config/database';
 import { redis, cacheUtils } from '../config/redis';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
@@ -10,7 +11,7 @@ import {
   getEstimatedDeliveryTime,
   isValidEmail,
   isValidUAEPhone 
-} from '@delivery-uae/shared';
+} from '../utils/helpers';
 
 export async function publicRoutes(fastify: FastifyInstance) {
   

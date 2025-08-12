@@ -15,7 +15,6 @@
     "db:seed": "node dist/scripts/seed.js"
   },
   "dependencies": {
-    "@delivery-uae/shared": "workspace:*",
     "@fastify/cookie": "^9.1.0",
     "@fastify/cors": "^8.4.0",
     "@fastify/helmet": "^11.1.1",

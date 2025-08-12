@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@delivery-uae/shared';
+import { UserRole } from '../models/User';
 import { requireRoles, authenticateToken } from '../middleware/auth';
 import { db } from '../config/database';
 import { config } from '../config/environment';

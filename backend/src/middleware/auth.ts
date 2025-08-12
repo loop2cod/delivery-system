@@ -1,8 +1,8 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { UserRole } from '@delivery-uae/shared';
+import { UserRole } from '../models/User';
 import { cacheUtils, redis } from '../config/redis';
-import { db } from '../config/database';
-import { logger, securityLogger } from '../utils/logger';
+import { User } from '../models/User';
+import { logger } from '../utils/logger';
 
 // Extend Fastify request interface
 declare module 'fastify' {
@@ -31,10 +31,9 @@ const publicRoutes = [
 
 // Role-based route access control
 const roleRouteMap: Record<string, UserRole[]> = {
-  '/api/admin': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
-  '/api/business': [UserRole.BUSINESS, UserRole.ADMIN, UserRole.SUPER_ADMIN],
-  '/api/driver': [UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN],
-  '/api/public': [UserRole.CUSTOMER, UserRole.BUSINESS, UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN]
+  '/api/admin': [UserRole.ADMIN],
+  '/api/business': [UserRole.BUSINESS, UserRole.ADMIN],
+  '/api/driver': [UserRole.DRIVER, UserRole.ADMIN]
 };
 
 /**
@@ -63,7 +62,7 @@ export async function authenticateToken(
     }
 
     if (!token) {
-      securityLogger.auth('unknown', false, ip, headers['user-agent'] || '');
+      logger.warn('Authentication failed - no token', { ip, userAgent: headers['user-agent'] });
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Authentication token required'
@@ -78,7 +77,7 @@ export async function authenticateToken(
       const { config } = require('../config/environment');
       decoded = jwt.verify(token, config.JWT_SECRET);
     } catch (error) {
-      securityLogger.auth('unknown', false, ip, headers['user-agent'] || '');
+      logger.warn('Authentication failed - invalid token', { ip, userAgent: headers['user-agent'] });
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Invalid or expired token'
@@ -115,40 +114,38 @@ export async function authenticateToken(
     
     if (!user) {
       // User not in cache, fetch from database
-      const userQuery = `
-        SELECT u.id, u.email, u.name, u.role, u.status,
-               cu.company_id, d.id as driver_id
-        FROM users u
-        LEFT JOIN company_users cu ON u.id = cu.user_id AND cu.is_primary = true
-        LEFT JOIN drivers d ON u.id = d.user_id
-        WHERE u.id = $1 AND u.status = 'ACTIVE'
-      `;
-      
-      user = await db.queryOne(userQuery, [decoded.userId]);
-      
-      if (!user) {
+      try {
+        user = await User.findById(decoded.userId).select('-password_hash');
+        
+        if (!user || user.status !== 'ACTIVE') {
+          return reply.code(401).send({
+            error: 'Unauthorized',
+            message: 'User not found or inactive'
+          });
+        }
+
+        // Cache user data
+        try {
+          await redis.set(
+            cacheUtils.keys.user(user.id),
+            user,
+            cacheUtils.ttl.MEDIUM
+          );
+        } catch (error) {
+          // Redis unavailable, continuing without cache
+        }
+      } catch (error) {
         return reply.code(401).send({
           error: 'Unauthorized',
           message: 'User not found or inactive'
         });
-      }
-
-      // Cache user data
-      try {
-        await redis.set(
-          cacheUtils.keys.user(user.id),
-          user,
-          cacheUtils.ttl.MEDIUM
-        );
-      } catch (error) {
-        // Redis unavailable, continuing without cache
       }
     }
 
     // Check role-based access
     const hasAccess = checkRouteAccess(url, user.role);
     if (!hasAccess) {
-      securityLogger.suspicious('UNAUTHORIZED_ACCESS', ip, {
+      logger.warn('Unauthorized access attempt', {
         userId: user.id,
         role: user.role,
         route: url,
@@ -167,8 +164,8 @@ export async function authenticateToken(
       email: user.email,
       name: user.name,  
       role: user.role,
-      companyId: user.company_id,
-      driverId: user.driver_id
+      companyId: user.companyId,
+      driverId: user.driverId
     };
 
     // Update session last used time
@@ -180,7 +177,7 @@ export async function authenticateToken(
     }
 
     // Log successful authentication
-    securityLogger.auth(user.email, true, ip, headers['user-agent'] || '');
+    logger.info('User authenticated', { userId: user.id, email: user.email, role: user.role });
 
   } catch (error) {
     logger.error('Authentication middleware error:', error);
@@ -222,7 +219,7 @@ export function requireRoles(...roles: UserRole[]) {
     }
 
     if (!roles.includes(request.user.role)) {
-      securityLogger.suspicious('ROLE_VIOLATION', request.ip, {
+      logger.warn('Role violation', {
         userId: request.user.id,
         requiredRoles: roles,
         userRole: request.user.role,
@@ -259,7 +256,7 @@ export function requireCompanyOwnership() {
       const companyIdFromRoute = (request.params as any)?.companyId;
       
       if (companyIdFromRoute && companyIdFromRoute !== request.user.companyId) {
-        securityLogger.suspicious('COMPANY_ACCESS_VIOLATION', request.ip, {
+        logger.warn('Company access violation', {
           userId: request.user.id,
           userCompanyId: request.user.companyId,
           requestedCompanyId: companyIdFromRoute
@@ -296,7 +293,7 @@ export function requireDriverOwnership() {
       const driverIdFromRoute = (request.params as any)?.driverId;
       
       if (driverIdFromRoute && driverIdFromRoute !== request.user.driverId) {
-        securityLogger.suspicious('DRIVER_ACCESS_VIOLATION', request.ip, {
+        logger.warn('Driver access violation', {
           userId: request.user.id,
           userDriverId: request.user.driverId,
           requestedDriverId: driverIdFromRoute
@@ -331,7 +328,7 @@ export async function authenticateApiKey(
   const validApiKeys = process.env.VALID_API_KEYS?.split(',') || [];
   
   if (!validApiKeys.includes(apiKey)) {
-    securityLogger.suspicious('INVALID_API_KEY', request.ip, {
+    logger.warn('Invalid API key', {
       apiKey: apiKey.substring(0, 8) + '...',
       route: request.url
     });
@@ -364,7 +361,12 @@ export async function rateLimitByUser(
   }
 
   if (current > maxRequests) {
-    securityLogger.rateLimit(request.ip, request.url, maxRequests);
+    logger.warn('Rate limit exceeded', {
+      userId: request.user.id,
+      ip: request.ip,
+      url: request.url,
+      limit: maxRequests
+    });
     
     return reply.code(429).send({
       error: 'Too Many Requests',

@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@delivery-uae/shared';
+import { UserRole } from '../models/User';
 import { requireRoles, authenticateToken } from '../middleware/auth';
 import { db } from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -17,44 +17,44 @@ export async function adminRoutes(fastify: FastifyInstance) {
   fastify.get('/dashboard', asyncHandler(async (request, reply) => {
     // Get dashboard statistics
     const stats = await Promise.all([
-      db.queryOne('SELECT COUNT(*) as count FROM inquiries'),
-      db.queryOne('SELECT COUNT(*) as count FROM inquiries WHERE status = $1', ['NEW']),
-      db.queryOne('SELECT COUNT(*) as count FROM drivers'),
-      db.queryOne('SELECT COUNT(*) as count FROM drivers WHERE status = $1', ['AVAILABLE']),
-      db.queryOne('SELECT COUNT(*) as count FROM companies WHERE status = $1', ['ACTIVE']),
-      db.queryOne('SELECT COUNT(*) as count FROM delivery_requests WHERE status IN ($1, $2)', ['ASSIGNED', 'IN_PROGRESS']),
-      db.queryOne('SELECT COUNT(*) as count FROM delivery_requests WHERE DATE(created_at) = CURRENT_DATE'),
-      db.queryOne('SELECT COALESCE(SUM(total_amount), 0) as total FROM delivery_requests WHERE status = $1', ['COMPLETED'])
+      db.count('inquiries'),
+      db.count('inquiries', { status: 'NEW' }),
+      db.count('drivers'),
+      db.count('drivers', { status: 'AVAILABLE' }),
+      db.count('companies', { status: 'ACTIVE' }),
+      db.count('delivery_requests', { status: { $in: ['ASSIGNED', 'IN_PROGRESS'] } }),
+      db.count('delivery_requests', { created_at: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) } }),
+      db.aggregate('delivery_requests', [{ $match: { status: 'COMPLETED' } }, { $group: { _id: null, total: { $sum: '$total_amount' } } }])
     ]);
 
     // Get recent activity
-    const recentActivity = await db.query(`
-      SELECT 'inquiry' as type, reference_number as reference, company_name as title, created_at
-      FROM inquiries 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-      UNION ALL
-      SELECT 'delivery' as type, request_number as reference, 
-             CONCAT('Delivery from ', pickup_area, ' to ', (
-               SELECT delivery_area FROM packages WHERE request_id = delivery_requests.id LIMIT 1
-             )) as title, created_at
-      FROM delivery_requests 
-      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
-      ORDER BY created_at DESC
-      LIMIT 10
-    `);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentInquiries = await db.findMany('inquiries', 
+      { created_at: { $gte: sevenDaysAgo } }, 
+      { sort: { created_at: -1 }, limit: 5, projection: { reference_number: 1, company_name: 1, created_at: 1 } }
+    );
+    const recentDeliveries = await db.findMany('delivery_requests', 
+      { created_at: { $gte: sevenDaysAgo } }, 
+      { sort: { created_at: -1 }, limit: 5, projection: { request_number: 1, pickup_area: 1, created_at: 1 } }
+    );
+    
+    const recentActivity = [
+      ...recentInquiries.map(item => ({ type: 'inquiry', reference: item.reference_number, title: item.company_name, created_at: item.created_at })),
+      ...recentDeliveries.map(item => ({ type: 'delivery', reference: item.request_number, title: `Delivery from ${item.pickup_area}`, created_at: item.created_at }))
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
 
     return {
       stats: {
-        totalInquiries: parseInt(stats[0].count),
-        newInquiries: parseInt(stats[1].count),
-        totalDrivers: parseInt(stats[2].count),
-        activeDrivers: parseInt(stats[3].count),
-        totalCompanies: parseInt(stats[4].count),
-        activeDeliveries: parseInt(stats[5].count),
-        todayDeliveries: parseInt(stats[6].count),
-        totalRevenue: parseFloat(stats[7].total)
+        totalInquiries: stats[0],
+        newInquiries: stats[1],
+        totalDrivers: stats[2],
+        activeDrivers: stats[3],
+        totalCompanies: stats[4],
+        activeDeliveries: stats[5],
+        todayDeliveries: stats[6],
+        totalRevenue: stats[7][0]?.total || 0
       },
-      recentActivity: recentActivity.rows || []
+      recentActivity
     };
   }));
 
@@ -97,39 +97,34 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Validate pagination parameters
     const validPage = Math.max(1, parseInt(page) || 1);
     const validLimit = Math.max(1, Math.min(100, parseInt(limit) || 10)); // Max 100 items per page
-    const offset = (validPage - 1) * validLimit;
-
-    let whereClause = 'WHERE 1=1 AND status != \'CONVERTED\''; // Exclude converted inquiries
-    const params: any[] = [];
-    let paramCount = 0;
-
+    
+    // Build MongoDB filter
+    const filter: any = { status: { $ne: 'CONVERTED' } }; // Exclude converted inquiries
+    
     if (status) {
-      paramCount++;
-      whereClause += ` AND status = $${paramCount}`;
-      params.push(status);
+      filter.status = status;
     }
-
+    
     if (search) {
-      paramCount++;
-      whereClause += ` AND (company_name ILIKE $${paramCount} OR contact_person ILIKE $${paramCount} OR email ILIKE $${paramCount})`;
-      params.push(`%${search}%`);
+      filter.$or = [
+        { company_name: { $regex: search, $options: 'i' } },
+        { contact_person: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
     }
-
+    
     // Get total count
-    const countResult = await db.queryOne(`SELECT COUNT(*) as count FROM inquiries ${whereClause}`, params);
-    const total = parseInt(countResult.count);
-
-    // Get inquiries
-    const inquiriesResult = await db.query(`
-      SELECT i.*
-      FROM inquiries i
-      ${whereClause}
-      ORDER BY i.created_at DESC
-      LIMIT ${validLimit} OFFSET ${offset}
-    `, params);
+    const total = await db.count('inquiries', filter);
+    
+    // Get inquiries with pagination
+    const inquiries = await db.findMany('inquiries', filter, {
+      sort: { created_at: -1 },
+      skip: (validPage - 1) * validLimit,
+      limit: validLimit
+    });
 
     return {
-      inquiries: inquiriesResult.rows,
+      inquiries,
       pagination: {
         page: validPage,
         limit: validLimit,
@@ -165,9 +160,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const adminId = request.user!.id;
 
     // Get the current inquiry details
-    const currentInquiry = await db.queryOne(`
-      SELECT * FROM inquiries WHERE id = $1
-    `, [id]);
+    const currentInquiry = await db.findOne('inquiries', { _id: id });
 
     if (!currentInquiry) {
       reply.code(404);
@@ -177,9 +170,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // If approving the inquiry, automatically convert it to a company
     if (updates.status === 'APPROVED' && currentInquiry.status !== 'APPROVED') {
       // Check if company already exists with this email
-      const existingCompany = await db.queryOne(`
-        SELECT id FROM companies WHERE email = $1
-      `, [currentInquiry.email]);
+      const existingCompany = await db.findOne('companies', { email: currentInquiry.email });
 
       if (!existingCompany) {
         // Generate a unique trade license number
@@ -187,33 +178,24 @@ export async function adminRoutes(fastify: FastifyInstance) {
         const licenseNumber = `${tradeLicensePrefix}-${Date.now().toString().slice(-7)}`;
         
         // Create company from inquiry data
-        const newCompany = await db.queryOne(`
-          INSERT INTO companies (
-            name, trade_license, industry, contact_person, phone, email,
-            status, account_type, street_address, area, city, emirate, country
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          RETURNING *
-        `, [
-          currentInquiry.company_name,
-          licenseNumber,
-          currentInquiry.industry,
-          currentInquiry.contact_person,
-          currentInquiry.phone,
-          currentInquiry.email,
-          'ACTIVE',
-          'BASIC', // Default account type
-          'To be updated', // Placeholder address
-          'To be updated', // Placeholder area
-          'Dubai', // Default city
-          'DUBAI', // Default emirate
-          'United Arab Emirates'
-        ]);
+        const newCompany = await db.insertOne('companies', {
+          name: currentInquiry.company_name,
+          trade_license: licenseNumber,
+          industry: currentInquiry.industry,
+          contact_person: currentInquiry.contact_person,
+          phone: currentInquiry.phone,
+          email: currentInquiry.email,
+          status: 'ACTIVE',
+          account_type: 'BASIC', // Default account type
+          street_address: 'To be updated', // Placeholder address
+          area: 'To be updated', // Placeholder area
+          city: 'Dubai', // Default city
+          emirate: 'DUBAI', // Default emirate
+          country: 'United Arab Emirates'
+        });
 
         // Check if business user already exists with this email
-        const existingUser = await db.queryOne(`
-          SELECT id FROM users WHERE email = $1
-        `, [currentInquiry.email]);
+        const existingUser = await db.findOne('users', { email: currentInquiry.email });
 
         let businessUserId;
         
@@ -223,36 +205,30 @@ export async function adminRoutes(fastify: FastifyInstance) {
           const hashedPassword = await bcrypt.hash(tempPassword, 10);
           
           // Create business user account
-          const businessUser = await db.queryOne(`
-            INSERT INTO users (
-              email, password_hash, name, phone, role, status, email_verified
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING *
-          `, [
-            currentInquiry.email,
-            hashedPassword,
-            currentInquiry.contact_person,
-            currentInquiry.phone,
-            'BUSINESS',
-            'ACTIVE',
-            true
-          ]);
+          const businessUser = await db.insertOne('users', {
+            email: currentInquiry.email,
+            password_hash: hashedPassword,
+            name: currentInquiry.contact_person,
+            phone: currentInquiry.phone,
+            role: 'BUSINESS',
+            status: 'ACTIVE',
+            email_verified: true
+          });
           
-          businessUserId = businessUser.id;
+          businessUserId = businessUser._id;
           
           // TODO: Send email with login credentials
           console.log(`Created business user for ${currentInquiry.email} with temporary password: ${tempPassword}`);
         } else {
-          businessUserId = existingUser.id;
+          businessUserId = existingUser._id;
         }
 
         // Link user to company
-        await db.query(`
-          INSERT INTO company_users (company_id, user_id, is_primary)
-          VALUES ($1, $2, $3)
-          ON CONFLICT (company_id, user_id) DO NOTHING
-        `, [newCompany.id, businessUserId, true]);
+        await db.insertOne('company_users', {
+          company_id: newCompany._id,
+          user_id: businessUserId,
+          is_primary: true
+        });
 
         // Update inquiry status to CONVERTED
         updates.status = 'CONVERTED';
@@ -262,14 +238,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
       }
     }
 
-    const updatedInquiry = await db.queryOne(`
-      UPDATE inquiries 
-      SET status = COALESCE($1, status),
-          special_requirements = COALESCE($2, special_requirements),
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
-      RETURNING *
-    `, [updates.status, updates.notes, id]);
+    const updateData: any = {};
+    if (updates.status) updateData.status = updates.status;
+    if (updates.notes) updateData.special_requirements = updates.notes;
+    
+    const updatedInquiry = await db.updateOne('inquiries', { _id: id }, { $set: updateData });
 
     return updatedInquiry;
   }));
@@ -745,33 +718,27 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Generate reference number
     const currentYear = new Date().getFullYear();
-    const countResult = await db.queryOne(
-      'SELECT COUNT(*) as count FROM inquiries WHERE EXTRACT(YEAR FROM created_at) = $1',
-      [currentYear]
-    );
-    const sequenceNumber = (parseInt(countResult.count) + 1).toString().padStart(4, '0');
+    const startOfYear = new Date(currentYear, 0, 1);
+    const endOfYear = new Date(currentYear + 1, 0, 1);
+    const countResult = await db.count('inquiries', {
+      created_at: { $gte: startOfYear, $lt: endOfYear }
+    });
+    const sequenceNumber = (countResult + 1).toString().padStart(4, '0');
     const referenceNumber = `INQ-${currentYear}-${sequenceNumber}`;
 
     // Create inquiry
-    const newInquiry = await db.queryOne(`
-      INSERT INTO inquiries (
-        reference_number, company_name, industry, contact_person, 
-        email, phone, expected_volume, service_type, special_requirements, status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *
-    `, [
-      referenceNumber,
-      inquiryData.company_name,
-      inquiryData.industry,
-      inquiryData.contact_person,
-      inquiryData.email,
-      inquiryData.phone,
-      inquiryData.expected_volume,
-      'General Delivery', // Default service type
-      inquiryData.special_requirements,
-      'NEW'
-    ]);
+    const newInquiry = await db.insertOne('inquiries', {
+      reference_number: referenceNumber,
+      company_name: inquiryData.company_name,
+      industry: inquiryData.industry,
+      contact_person: inquiryData.contact_person,
+      email: inquiryData.email,
+      phone: inquiryData.phone,
+      expected_volume: inquiryData.expected_volume,
+      service_type: 'General Delivery', // Default service type
+      special_requirements: inquiryData.special_requirements,
+      status: 'NEW'
+    });
 
     reply.code(201);
     return newInquiry;

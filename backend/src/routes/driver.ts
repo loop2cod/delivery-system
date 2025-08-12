@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { UserRole } from '@delivery-uae/shared';
+import { UserRole } from '../models/User';
 import { requireRoles } from '../middleware/auth';
 
 export async function driverRoutes(fastify: FastifyInstance) {

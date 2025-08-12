@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { requireRoles } from '../middleware/auth';
-import { UserRole } from '@delivery-uae/shared';
+import { UserRole } from '../models/User';
 
 export async function metricsRoutes(fastify: FastifyInstance) {
   // Metrics endpoint for Prometheus scraping

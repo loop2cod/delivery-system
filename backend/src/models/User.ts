@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 
 // User role and status enums
 export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
   ADMIN = 'ADMIN',
   BUSINESS = 'BUSINESS',
   DRIVER = 'DRIVER'

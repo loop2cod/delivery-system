@@ -57,7 +57,11 @@
       "Bash(pgrep:*)",
       "Bash(MONGODB_URL=\"mongodb://localhost:27017/delivery_uae_dev\" node database/init-mongodb.js)",
       "Bash(PORT=3005 npm run dev:backend)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(pnpm --filter @delivery-uae/backend run build)",
+      "Bash(pnpm create-su:*)",
+      "Bash(mongosh:*)",
+      "Bash(pnpm -w run create-suAdmin)"
     ],
     "deny": []
   }
