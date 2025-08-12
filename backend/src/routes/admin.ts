@@ -296,14 +296,24 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const { id } = request.params as any;
     const { status } = request.body as any;
 
-    const updatedDriver = await db.queryOne(`
-      UPDATE drivers 
-      SET status = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING *, status as status
-    `, [status, id]);
+    const updatedDriver = await db.updateOne('drivers', 
+      { _id: new ObjectId(id) }, 
+      { $set: { status, updated_at: new Date() } }
+    );
 
-    return updatedDriver;
+    if (!updatedDriver) {
+      return reply.code(404).send({ error: 'Driver not found' });
+    }
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const result = {
+      ...updatedDriver,
+      id: updatedDriver._id.toString(),
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Get all companies
@@ -558,25 +568,49 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params.push(`%${search}%`);
     }
 
-    // Get total count
-    const countResult = await db.queryOne(`SELECT COUNT(*) as count FROM drivers d ${whereClause}`, params);
-    const total = parseInt(countResult.count);
+    // Build MongoDB filter
+    const filter: any = {};
 
-    // Get drivers
-    const driversResult = await db.query(`
-      SELECT d.*,
-             COUNT(dr.id) as total_deliveries,
-             COUNT(CASE WHEN dr.status = 'COMPLETED' THEN 1 END) as completed_deliveries
-      FROM drivers d
-      LEFT JOIN delivery_requests dr ON d.id = dr.assigned_driver_id
-      ${whereClause}
-      GROUP BY d.id
-      ORDER BY d.created_at DESC
-      LIMIT ${validLimit} OFFSET ${offset}
-    `, params);
+    if (status) {
+      filter.status = status;
+    }
+
+    if (availability) {
+      filter.status = availability; // availability and status are the same field
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get total count
+    const total = await db.count('drivers', filter);
+
+    // Get drivers with pagination
+    const rawDrivers = await db.findMany('drivers', filter, {
+      sort: { created_at: -1 },
+      skip: (validPage - 1) * validLimit,
+      limit: validLimit
+    });
+
+    // Convert MongoDB _id to id for frontend compatibility and add delivery stats placeholder
+    const drivers = rawDrivers.map(driver => ({
+      ...driver,
+      id: driver._id.toString(),
+      total_deliveries: 0, // TODO: Calculate actual delivery count
+      completed_deliveries: 0, // TODO: Calculate actual completed delivery count
+      _id: undefined
+    })).map(driver => {
+      delete driver._id;
+      return driver;
+    });
 
     return {
-      drivers: driversResult.rows,
+      drivers,
       pagination: {
         page: validPage,
         limit: validLimit,
@@ -603,21 +637,23 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const driverResult = await db.queryOne(`
-      SELECT d.*, d.status as status,
-             COUNT(dr.id) as total_deliveries,
-             COUNT(CASE WHEN dr.status = 'COMPLETED' THEN 1 END) as completed_deliveries
-      FROM drivers d
-      LEFT JOIN delivery_requests dr ON d.id = dr.assigned_driver_id
-      WHERE d.id = $1
-      GROUP BY d.id
-    `, [id]);
+    const driver = await db.findOne('drivers', { _id: new ObjectId(id) });
 
-    if (!driverResult) {
+    if (!driver) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    return driverResult;
+    // Convert MongoDB _id to id for frontend compatibility and add delivery stats placeholder
+    const result = {
+      ...driver,
+      id: driver._id.toString(),
+      total_deliveries: 0, // TODO: Calculate actual delivery count
+      completed_deliveries: 0, // TODO: Calculate actual completed delivery count
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Create new driver
@@ -651,22 +687,94 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const driverData = request.body as any;
 
-    // TODO: Fix driver creation - needs to create user first then driver
-    return reply.code(501).send({
-      error: 'Not implemented',
-      message: 'Driver creation functionality needs to be implemented properly'
-    });
+    try {
+      // Check if driver with this email already exists
+      const existingDriver = await db.findOne('drivers', { email: driverData.email });
+      if (existingDriver) {
+        return reply.code(400).send({
+          error: 'Driver already exists',
+          message: 'A driver with this email already exists'
+        });
+      }
 
-    // Add emergency contact if provided
-    if (driverData.emergency_contact && driverData.emergency_contact.name) {
-      await db.query(`
-        UPDATE drivers 
-        SET emergency_contact = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [JSON.stringify(driverData.emergency_contact), newDriverResult.id]);
+      // Check if user with this email already exists
+      const existingUser = await db.findOne('users', { email: driverData.email });
+      if (existingUser) {
+        return reply.code(400).send({
+          error: 'Email already in use',
+          message: 'A user with this email already exists in the system'
+        });
+      }
+
+      // Generate a temporary password for the driver
+      const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      // Create user account for the driver
+      const driverUser = await db.insertOne('users', {
+        email: driverData.email,
+        password_hash: hashedPassword,
+        name: driverData.name,
+        phone: driverData.phone,
+        role: 'DRIVER',
+        status: 'ACTIVE',
+        email_verified: true
+      });
+
+      // Create driver record
+      const newDriverData = {
+        user_id: driverUser._id,
+        name: driverData.name,
+        email: driverData.email,
+        phone: driverData.phone,
+        license_number: driverData.license_number,
+        license_expiry: new Date(driverData.license_expiry),
+        vehicle_type: driverData.vehicle_type,
+        vehicle_plate: driverData.vehicle_plate,
+        status: 'AVAILABLE',
+        emergency_contact: driverData.emergency_contact || null
+      };
+
+      const newDriver = await db.insertOne('drivers', newDriverData);
+
+      // Convert MongoDB _id to id for frontend compatibility
+      const result = {
+        ...newDriver,
+        id: newDriver._id.toString(),
+        _id: undefined
+      };
+      delete result._id;
+
+      // Log the temporary password (in production, this should be sent via email)
+      console.log(`Created driver account for ${driverData.email} with temporary password: ${tempPassword}`);
+
+      reply.code(201);
+      return result;
+    } catch (error: any) {
+      console.error('Error creating driver:', error);
+      
+      // Handle specific MongoDB errors
+      if (error.code === 11000) {
+        // Duplicate key error
+        if (error.keyPattern?.email) {
+          return reply.code(400).send({
+            error: 'Email already exists',
+            message: 'A user with this email already exists in the system'
+          });
+        }
+        if (error.keyPattern?.license_number) {
+          return reply.code(400).send({
+            error: 'License number already exists',
+            message: 'A driver with this license number already exists'
+          });
+        }
+      }
+      
+      return reply.code(500).send({
+        error: 'Failed to create driver',
+        message: 'An error occurred while creating the driver account'
+      });
     }
-
-    reply.code(201).send(newDriverResult);
   }));
 
   // Update driver status
@@ -694,18 +802,24 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { status } = request.body as { status: string };
 
-    const updatedDriver = await db.queryOne(`
-      UPDATE drivers 
-      SET status = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING *, status as status
-    `, [status, id]);
+    const updatedDriver = await db.updateOne('drivers', 
+      { _id: new ObjectId(id) }, 
+      { $set: { status, updated_at: new Date() } }
+    );
 
     if (!updatedDriver) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    return updatedDriver;
+    // Convert MongoDB _id to id for frontend compatibility
+    const result = {
+      ...updatedDriver,
+      id: updatedDriver._id.toString(),
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Update driver availability
@@ -733,18 +847,24 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const { id } = request.params as { id: string };
     const { status } = request.body as { status: string };
 
-    const updatedDriver = await db.queryOne(`
-      UPDATE drivers 
-      SET status = $1, last_active = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING *, status as status
-    `, [status, id]);
+    const updatedDriver = await db.updateOne('drivers', 
+      { _id: new ObjectId(id) }, 
+      { $set: { status, last_active: new Date(), updated_at: new Date() } }
+    );
 
     if (!updatedDriver) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    return updatedDriver;
+    // Convert MongoDB _id to id for frontend compatibility
+    const result = {
+      ...updatedDriver,
+      id: updatedDriver._id.toString(),
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Create new inquiry (admin can create inquiries on behalf of customers)
@@ -934,14 +1054,28 @@ export async function adminRoutes(fastify: FastifyInstance) {
       }
     }
   }, asyncHandler(async (request, reply) => {
-    const staffResult = await db.query(`
-      SELECT id, name, email, role
-      FROM users 
-      WHERE role IN ('ADMIN', 'SUPER_ADMIN') AND status = 'ACTIVE'
-      ORDER BY name
-    `);
+    const rawStaff = await db.findMany('users', 
+      { 
+        role: { $in: ['ADMIN', 'SUPER_ADMIN'] }, 
+        status: 'ACTIVE' 
+      },
+      { 
+        sort: { name: 1 },
+        projection: { name: 1, email: 1, role: 1 }
+      }
+    );
 
-    return { staff: staffResult.rows };
+    // Convert MongoDB _id to id for frontend compatibility
+    const staff = rawStaff.map(member => ({
+      ...member,
+      id: member._id.toString(),
+      _id: undefined
+    })).map(member => {
+      delete member._id;
+      return member;
+    });
+
+    return { staff };
   }));
 
   // Bulk update inquiry status
