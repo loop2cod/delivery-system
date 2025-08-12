@@ -499,7 +499,7 @@ export default function ProfilePage() {
                     ))}
                   </select>
                 ) : (
-                  <p className="text-gray-900">{company.emirate.replace('_', ' ')}</p>
+                  <p className="text-gray-900">{company.emirate ? company.emirate.replace('_', ' ') : 'Not specified'}</p>
                 )}
                 {errors.emirate && (
                   <p className="mt-1 text-sm text-red-600">{errors.emirate.message}</p>

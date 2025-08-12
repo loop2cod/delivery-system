@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { UserRole } from '../models/User';
 import { requireRoles, authenticateToken } from '../middleware/auth';
 import { db } from '../config/database';
+import { ObjectId } from 'mongodb';
 import { config } from '../config/environment';
 import bcrypt from 'bcryptjs';
 
@@ -35,15 +36,21 @@ export async function businessRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const company = await db.queryOne(`
-        SELECT * FROM companies WHERE id = $1
-      `, [user.companyId]);
+      const company = await db.findOne('companies', { _id: new ObjectId(user.companyId) });
 
       if (!company) {
         return reply.code(404).send({ error: 'Company not found' });
       }
 
-      return { company };
+      // Convert MongoDB document to frontend format
+      const companyData = {
+        ...company,
+        id: company._id.toString(),
+        _id: undefined
+      };
+      delete companyData._id;
+
+      return { company: companyData };
     } catch (error) {
       console.error('Failed to get company profile:', error);
       return reply.code(500).send({ error: 'Failed to get company profile' });
@@ -80,25 +87,35 @@ export async function businessRoutes(fastify: FastifyInstance) {
     const updates = request.body as any;
 
     try {
-      // Build dynamic update query
-      const fields = Object.keys(updates);
-      const values = Object.values(updates);
-      
-      if (fields.length === 0) {
+      if (Object.keys(updates).length === 0) {
         return reply.code(400).send({ error: 'No fields to update' });
       }
 
-      const setClause = fields.map((field, index) => `${field} = $${index + 1}`).join(', ');
-      values.push(user.companyId); // Add company ID as last parameter
+      // Add updated_at timestamp
+      const updateData = {
+        ...updates,
+        updated_at: new Date()
+      };
 
-      const updatedCompany = await db.queryOne(`
-        UPDATE companies 
-        SET ${setClause}, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $${values.length}
-        RETURNING *
-      `, values);
+      const updatedCompany = await db.updateOne(
+        'companies', 
+        { _id: new ObjectId(user.companyId) },
+        { $set: updateData }
+      );
 
-      return { company: updatedCompany };
+      if (!updatedCompany) {
+        return reply.code(404).send({ error: 'Company not found' });
+      }
+
+      // Convert MongoDB document to frontend format
+      const companyData = {
+        ...updatedCompany,
+        id: updatedCompany._id.toString(),
+        _id: undefined
+      };
+      delete companyData._id;
+
+      return { company: companyData };
     } catch (error) {
       console.error('Failed to update company profile:', error);
       return reply.code(500).send({ error: 'Failed to update company profile' });

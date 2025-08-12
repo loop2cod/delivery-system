@@ -7,6 +7,7 @@ import { config } from '../config/environment';
 import { logger } from '../utils/logger';
 import { User } from '../models/User';
 import { ValidationError, ConflictError, NotFoundError } from '../middleware/errorHandler';
+import { db } from '../config/database';
 
 export interface LoginRequest {
   email: string;
@@ -131,7 +132,9 @@ export class AuthService {
           id: user._id.toString(),
           email: user.email,
           name: user.name,
-          role: user.role
+          role: user.role,
+          companyId: user.companyId,
+          driverId: user.driverId
         },
         cacheUtils.ttl.MEDIUM
       );
@@ -142,7 +145,8 @@ export class AuthService {
     logger.info('User logged in successfully', { 
       userId: user._id.toString(), 
       email: user.email, 
-      role: user.role 
+      role: user.role,
+      companyId: user.companyId
     });
 
     return {
@@ -150,7 +154,9 @@ export class AuthService {
         id: user._id.toString(),
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        companyId: user.companyId,
+        driverId: user.driverId
       },
       token,
       refreshToken,
