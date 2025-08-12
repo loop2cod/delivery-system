@@ -6,6 +6,44 @@ import { db } from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
 import bcrypt from 'bcryptjs';
 
+// Helper function to format dates for frontend compatibility
+function formatDatesForFrontend(obj: any): any {
+  if (!obj) return obj;
+  
+  const result = { ...obj };
+  
+  // Convert common date fields to ISO strings
+  const dateFields = ['license_expiry', 'joined_date', 'last_active', 'created_at', 'updated_at'];
+  
+  dateFields.forEach(field => {
+    if (result[field] && result[field] instanceof Date) {
+      result[field] = result[field].toISOString();
+    } else if (result[field] && typeof result[field] === 'string') {
+      // Try to parse and reformat if it's a date string
+      const date = new Date(result[field]);
+      if (!isNaN(date.getTime())) {
+        result[field] = date.toISOString();
+      }
+    }
+  });
+  
+  return result;
+}
+
+// Helper function to convert MongoDB document to frontend format
+function convertMongoDocToFrontend(doc: any): any {
+  if (!doc) return doc;
+  
+  const result = formatDatesForFrontend({
+    ...doc,
+    id: doc._id?.toString(),
+    _id: undefined
+  });
+  
+  delete result._id;
+  return result;
+}
+
 export async function adminRoutes(fastify: FastifyInstance) {
   // Apply authentication to all admin routes
   fastify.addHook('preHandler', authenticateToken);
@@ -305,10 +343,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    // Convert MongoDB _id to id for frontend compatibility
+    // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
       id: updatedDriver._id.toString(),
+      license_expiry: updatedDriver.license_expiry?.toISOString(),
+      joined_date: updatedDriver.joined_date?.toISOString(),
+      last_active: updatedDriver.last_active?.toISOString(),
+      created_at: updatedDriver.created_at?.toISOString(),
+      updated_at: updatedDriver.updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
@@ -576,7 +619,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
 
     if (availability) {
-      filter.status = availability; // availability and status are the same field
+      filter.availability_status = availability;
     }
 
     if (search) {
@@ -599,15 +642,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Convert MongoDB _id to id for frontend compatibility and add delivery stats placeholder
     const drivers = rawDrivers.map(driver => ({
-      ...driver,
-      id: driver._id.toString(),
+      ...convertMongoDocToFrontend(driver),
       total_deliveries: 0, // TODO: Calculate actual delivery count
       completed_deliveries: 0, // TODO: Calculate actual completed delivery count
-      _id: undefined
-    })).map(driver => {
-      delete driver._id;
-      return driver;
-    });
+    }));
 
     return {
       drivers,
@@ -645,13 +683,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Convert MongoDB _id to id for frontend compatibility and add delivery stats placeholder
     const result = {
-      ...driver,
-      id: driver._id.toString(),
+      ...convertMongoDocToFrontend(driver),
       total_deliveries: 0, // TODO: Calculate actual delivery count
       completed_deliveries: 0, // TODO: Calculate actual completed delivery count
-      _id: undefined
     };
-    delete result._id;
 
     return result;
   }));
@@ -722,6 +757,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       });
 
       // Create driver record
+      const now = new Date();
       const newDriverData = {
         user_id: driverUser._id,
         name: driverData.name,
@@ -731,19 +767,21 @@ export async function adminRoutes(fastify: FastifyInstance) {
         license_expiry: new Date(driverData.license_expiry),
         vehicle_type: driverData.vehicle_type,
         vehicle_plate: driverData.vehicle_plate,
-        status: 'AVAILABLE',
-        emergency_contact: driverData.emergency_contact || null
+        status: 'ACTIVE', // Employment status
+        availability_status: 'AVAILABLE', // Current availability
+        rating: 5.0, // Default rating
+        total_deliveries: 0,
+        completed_deliveries: 0,
+        documents_verified: false,
+        emergency_contact: driverData.emergency_contact || null,
+        joined_date: now,
+        last_active: now
       };
 
       const newDriver = await db.insertOne('drivers', newDriverData);
 
-      // Convert MongoDB _id to id for frontend compatibility
-      const result = {
-        ...newDriver,
-        id: newDriver._id.toString(),
-        _id: undefined
-      };
-      delete result._id;
+      // Convert MongoDB _id to id for frontend compatibility and format dates
+      const result = convertMongoDocToFrontend(newDriver);
 
       // Log the temporary password (in production, this should be sent via email)
       console.log(`Created driver account for ${driverData.email} with temporary password: ${tempPassword}`);
@@ -811,10 +849,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    // Convert MongoDB _id to id for frontend compatibility
+    // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
       id: updatedDriver._id.toString(),
+      license_expiry: updatedDriver.license_expiry?.toISOString(),
+      joined_date: updatedDriver.joined_date?.toISOString(),
+      last_active: updatedDriver.last_active?.toISOString(),
+      created_at: updatedDriver.created_at?.toISOString(),
+      updated_at: updatedDriver.updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
@@ -837,29 +880,34 @@ export async function adminRoutes(fastify: FastifyInstance) {
       },
       body: {
         type: 'object',
-        required: ['status'],
+        required: ['availability_status'],
         properties: {
-          status: { type: 'string', enum: ['AVAILABLE', 'BUSY', 'OFFLINE'] }
+          availability_status: { type: 'string', enum: ['AVAILABLE', 'BUSY', 'OFFLINE'] }
         }
       }
     }
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
-    const { status } = request.body as { status: string };
+    const { availability_status } = request.body as { availability_status: string };
 
     const updatedDriver = await db.updateOne('drivers', 
       { _id: new ObjectId(id) }, 
-      { $set: { status, last_active: new Date(), updated_at: new Date() } }
+      { $set: { availability_status, last_active: new Date(), updated_at: new Date() } }
     );
 
     if (!updatedDriver) {
       return reply.code(404).send({ error: 'Driver not found' });
     }
 
-    // Convert MongoDB _id to id for frontend compatibility
+    // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
       id: updatedDriver._id.toString(),
+      license_expiry: updatedDriver.license_expiry?.toISOString(),
+      joined_date: updatedDriver.joined_date?.toISOString(),
+      last_active: updatedDriver.last_active?.toISOString(),
+      created_at: updatedDriver.created_at?.toISOString(),
+      updated_at: updatedDriver.updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
