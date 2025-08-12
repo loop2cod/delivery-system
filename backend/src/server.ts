@@ -20,19 +20,22 @@ import { connectRedis } from './config/redis';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
-import { authMiddleware } from './middleware/auth';
+import { authenticateToken } from './middleware/auth';
+
+// Import models to register them with mongoose
+import './models';
 
 // Import routes
-import authRoutes from './routes/auth';
-import publicRoutes from './routes/public';
-import adminRoutes from './routes/admin';
-import businessRoutes from './routes/business';
-import driverRoutes from './routes/driver';
-import qrRoutes from './routes/qr';
-import gpsTrackingRoutes from './routes/gps-tracking';
-import webhookRoutes from './routes/webhooks';
-import websocketRoutes from './routes/websockets';
-import metricsRoutes from './routes/metrics';
+import { authRoutes } from './routes/auth';
+import { publicRoutes } from './routes/public';
+import { adminRoutes } from './routes/admin';
+import { businessRoutes } from './routes/business';
+import { driverRoutes } from './routes/driver';
+import { qrRoutes } from './routes/qr';
+import { gpsTrackingRoutes } from './routes/gps-tracking';
+import { webhookRoutes } from './routes/webhooks';
+import { wsHandler as websocketRoutes } from './routes/websockets';
+import { metricsRoutes } from './routes/metrics';
 
 class DeliveryServer {
   private server: FastifyInstance;
@@ -173,7 +176,8 @@ class DeliveryServer {
     }
 
     // Authentication middleware
-    this.server.decorate('authenticate', authMiddleware);
+    this.server.decorate('authenticate', authenticateToken);
+    this.server.addHook('preHandler', authenticateToken);
   }
 
   private setupRoutes(): void {

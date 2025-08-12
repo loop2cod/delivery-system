@@ -1,8 +1,0 @@
-# Production Namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: delivery-production
-  labels:
-    environment: production
-    app: delivery-management-system

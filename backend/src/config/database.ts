@@ -1,52 +1,57 @@
-import { Pool, PoolClient, QueryResult } from 'pg';
+import mongoose from 'mongoose';
+import { MongoClient, Db, Collection, ClientSession } from 'mongodb';
 import { config } from './environment';
 import { logger } from '../utils/logger';
 
-// Database connection pool
-const pool = new Pool({
-  connectionString: config.DATABASE_URL,
-  host: config.DB_HOST,
-  port: config.DB_PORT,
-  database: config.DB_NAME,
-  user: config.DB_USER,
-  password: config.DB_PASSWORD,
-  max: config.DB_MAX_CONNECTIONS,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-  ssl: config.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+// MongoDB connection
+let client: MongoClient;
+let database: Db;
 
-// Database query interface
+// Database connection interface
 export class DatabaseService {
-  private pool: Pool;
+  private db: Db;
+  private client: MongoClient;
 
-  constructor(pool: Pool) {
-    this.pool = pool;
+  constructor(client: MongoClient, database: Db) {
+    this.client = client;
+    this.db = database;
   }
 
   /**
-   * Execute a query with optional parameters
+   * Get a collection
    */
-  async query<T = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+  collection<T = any>(name: string): Collection<T> {
+    return this.db.collection<T>(name);
+  }
+
+  /**
+   * Find a single document
+   */
+  async findOne<T = any>(
+    collection: string,
+    filter: Record<string, any> = {},
+    options?: any
+  ): Promise<T | null> {
     const start = Date.now();
     
     try {
-      const result = await this.pool.query<T>(text, params);
+      const result = await this.collection<T>(collection).findOne(filter, options);
       const duration = Date.now() - start;
       
       if (duration > 1000) {
         logger.warn('Slow query detected', {
-          query: text.substring(0, 100),
+          collection,
+          operation: 'findOne',
           duration: `${duration}ms`,
-          rows: result.rowCount
+          filter: JSON.stringify(filter).substring(0, 100)
         });
       }
       
       return result;
     } catch (error) {
-      logger.error('Database query error', {
-        query: text.substring(0, 100),
-        params: params?.slice(0, 5),
+      logger.error('Database findOne error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
         error: error.message
       });
       throw error;
@@ -54,44 +59,279 @@ export class DatabaseService {
   }
 
   /**
-   * Execute a query and return the first row
+   * Find multiple documents
    */
-  async queryOne<T = any>(text: string, params?: any[]): Promise<T | null> {
-    const result = await this.query<T>(text, params);
-    return result.rows[0] || null;
+  async findMany<T = any>(
+    collection: string,
+    filter: Record<string, any> = {},
+    options?: any
+  ): Promise<T[]> {
+    const start = Date.now();
+    
+    try {
+      const result = await this.collection<T>(collection).find(filter, options).toArray();
+      const duration = Date.now() - start;
+      
+      if (duration > 1000) {
+        logger.warn('Slow query detected', {
+          collection,
+          operation: 'find',
+          duration: `${duration}ms`,
+          filter: JSON.stringify(filter).substring(0, 100),
+          count: result.length
+        });
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Database find error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
   }
 
   /**
-   * Execute a query and return all rows
+   * Insert a single document
    */
-  async queryMany<T = any>(text: string, params?: any[]): Promise<T[]> {
-    const result = await this.query<T>(text, params);
-    return result.rows;
+  async insertOne<T = any>(
+    collection: string,
+    document: Record<string, any>,
+    options?: any
+  ): Promise<any> {
+    try {
+      // Add timestamps
+      const now = new Date();
+      const docWithTimestamps = {
+        ...document,
+        created_at: document.created_at || now,
+        updated_at: document.updated_at || now
+      };
+
+      const result = await this.collection<T>(collection).insertOne(docWithTimestamps, options);
+      return { ...docWithTimestamps, _id: result.insertedId };
+    } catch (error) {
+      logger.error('Database insertOne error', {
+        collection,
+        document: JSON.stringify(document).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
   }
 
   /**
-   * Get a client from the pool for transactions
+   * Insert multiple documents
    */
-  async getClient(): Promise<PoolClient> {
-    return this.pool.connect();
+  async insertMany<T = any>(
+    collection: string,
+    documents: Record<string, any>[],
+    options?: any
+  ): Promise<any[]> {
+    try {
+      const now = new Date();
+      const docsWithTimestamps = documents.map(doc => ({
+        ...doc,
+        created_at: doc.created_at || now,
+        updated_at: doc.updated_at || now
+      }));
+
+      const result = await this.collection<T>(collection).insertMany(docsWithTimestamps, options);
+      return docsWithTimestamps.map((doc, index) => ({
+        ...doc,
+        _id: result.insertedIds[index]
+      }));
+    } catch (error) {
+      logger.error('Database insertMany error', {
+        collection,
+        count: documents.length,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update a single document
+   */
+  async updateOne<T = any>(
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>,
+    options?: any
+  ): Promise<T | null> {
+    try {
+      // Add updated timestamp
+      const updateWithTimestamp = {
+        ...update,
+        $set: {
+          ...update.$set,
+          updated_at: new Date()
+        }
+      };
+
+      const result = await this.collection<T>(collection).findOneAndUpdate(
+        filter,
+        updateWithTimestamp,
+        { returnDocument: 'after', ...options }
+      );
+      
+      return result;
+    } catch (error) {
+      logger.error('Database updateOne error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        update: JSON.stringify(update).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update multiple documents
+   */
+  async updateMany<T = any>(
+    collection: string,
+    filter: Record<string, any>,
+    update: Record<string, any>,
+    options?: any
+  ): Promise<any> {
+    try {
+      // Add updated timestamp
+      const updateWithTimestamp = {
+        ...update,
+        $set: {
+          ...update.$set,
+          updated_at: new Date()
+        }
+      };
+
+      const result = await this.collection<T>(collection).updateMany(
+        filter,
+        updateWithTimestamp,
+        options
+      );
+      
+      return result;
+    } catch (error) {
+      logger.error('Database updateMany error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        update: JSON.stringify(update).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a single document
+   */
+  async deleteOne<T = any>(
+    collection: string,
+    filter: Record<string, any>,
+    options?: any
+  ): Promise<boolean> {
+    try {
+      const result = await this.collection<T>(collection).deleteOne(filter, options);
+      return result.deletedCount > 0;
+    } catch (error) {
+      logger.error('Database deleteOne error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete multiple documents
+   */
+  async deleteMany<T = any>(
+    collection: string,
+    filter: Record<string, any>,
+    options?: any
+  ): Promise<number> {
+    try {
+      const result = await this.collection<T>(collection).deleteMany(filter, options);
+      return result.deletedCount;
+    } catch (error) {
+      logger.error('Database deleteMany error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Count documents
+   */
+  async count<T = any>(
+    collection: string,
+    filter: Record<string, any> = {},
+    options?: any
+  ): Promise<number> {
+    try {
+      return await this.collection<T>(collection).countDocuments(filter, options);
+    } catch (error) {
+      logger.error('Database count error', {
+        collection,
+        filter: JSON.stringify(filter).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Execute aggregation pipeline
+   */
+  async aggregate<T = any>(
+    collection: string,
+    pipeline: Record<string, any>[],
+    options?: any
+  ): Promise<T[]> {
+    try {
+      return await this.collection<T>(collection).aggregate(pipeline, options).toArray();
+    } catch (error) {
+      logger.error('Database aggregate error', {
+        collection,
+        pipeline: JSON.stringify(pipeline).substring(0, 100),
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Start a transaction session
+   */
+  async startSession(): Promise<ClientSession> {
+    return this.client.startSession();
   }
 
   /**
    * Execute a transaction
    */
-  async transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-    const client = await this.getClient();
+  async transaction<T>(callback: (session: ClientSession) => Promise<T>): Promise<T> {
+    const session = await this.startSession();
     
     try {
-      await client.query('BEGIN');
-      const result = await callback(client);
-      await client.query('COMMIT');
+      session.startTransaction();
+      const result = await callback(session);
+      await session.commitTransaction();
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      await session.abortTransaction();
       throw error;
     } finally {
-      client.release();
+      await session.endSession();
     }
   }
 
@@ -100,7 +340,7 @@ export class DatabaseService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      await this.query('SELECT 1');
+      await this.db.admin().ping();
       return true;
     } catch (error) {
       logger.error('Database health check failed:', error);
@@ -109,152 +349,168 @@ export class DatabaseService {
   }
 
   /**
-   * Get connection pool statistics
+   * Get database statistics
    */
-  getPoolStats() {
-    return {
-      totalCount: this.pool.totalCount,
-      idleCount: this.pool.idleCount,
-      waitingCount: this.pool.waitingCount
-    };
+  async getStats() {
+    try {
+      const stats = await this.db.stats();
+      return {
+        collections: stats.collections,
+        objects: stats.objects,
+        dataSize: stats.dataSize,
+        storageSize: stats.storageSize,
+        indexes: stats.indexes
+      };
+    } catch (error) {
+      logger.error('Failed to get database stats:', error);
+      return null;
+    }
   }
 
   /**
-   * Close all connections
+   * Close connection
    */
-  async end(): Promise<void> {
-    await this.pool.end();
+  async close(): Promise<void> {
+    await this.client.close();
     logger.info('Database connections closed');
   }
 }
 
 // Create database service instance
-export const db = new DatabaseService(pool);
+export let db: DatabaseService;
+
+// Connect to database function
+export async function connectDatabase(): Promise<void> {
+  try {
+    // Initialize Mongoose connection
+    await mongoose.connect(config.MONGODB_URL, {
+      maxPoolSize: config.MONGODB_MAX_POOL_SIZE,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000
+    });
+
+    // Initialize native MongoDB client for advanced operations
+    client = new MongoClient(config.MONGODB_URL, {
+      maxPoolSize: config.MONGODB_MAX_POOL_SIZE,
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000
+    });
+
+    await client.connect();
+    database = client.db(config.MONGODB_DB_NAME);
+
+    // Create database service instance
+    db = new DatabaseService(client, database);
+
+    // Test the connection
+    await db.healthCheck();
+    
+    logger.info('Database connection successful', {
+      database: config.MONGODB_DB_NAME,
+      host: config.MONGODB_HOST,
+      port: config.MONGODB_PORT
+    });
+  } catch (error) {
+    logger.error('Failed to connect to database:', error);
+    throw error;
+  }
+}
 
 // Database helper functions
 export const dbHelpers = {
   /**
-   * Build WHERE clause with pagination
+   * Build pagination options
    */
-  buildPaginationQuery(
-    baseQuery: string,
+  buildPaginationOptions(
     page: number = 1,
     limit: number = 10,
-    orderBy: string = 'created_at DESC'
-  ): { query: string; offset: number } {
-    const offset = (page - 1) * limit;
-    const query = `
-      ${baseQuery}
-      ORDER BY ${orderBy}
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-    return { query, offset };
+    sort: Record<string, 1 | -1> = { created_at: -1 }
+  ): { skip: number; limit: number; sort: Record<string, 1 | -1> } {
+    const skip = (page - 1) * limit;
+    return { skip, limit, sort };
   },
 
   /**
-   * Build search query with ILIKE
+   * Build search filter with regex
    */
-  buildSearchQuery(fields: string[], searchTerm: string): string {
-    if (!searchTerm) return '';
+  buildSearchFilter(fields: string[], searchTerm: string): Record<string, any> {
+    if (!searchTerm) return {};
     
-    const conditions = fields.map(field => 
-      `${field} ILIKE $1`
-    ).join(' OR ');
+    const conditions = fields.map(field => ({
+      [field]: { $regex: searchTerm, $options: 'i' }
+    }));
     
-    return `(${conditions})`;
+    return { $or: conditions };
   },
 
   /**
-   * Build filter query from object
+   * Build filters from object
    */
-  buildFiltersQuery(
-    filters: Record<string, any>,
-    paramOffset: number = 0
-  ): { conditions: string[]; params: any[] } {
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let paramIndex = paramOffset + 1;
+  buildFilters(filters: Record<string, any>): Record<string, any> {
+    const mongoFilters: Record<string, any> = {};
 
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         if (Array.isArray(value)) {
-          conditions.push(`${key} = ANY($${paramIndex})`);
-          params.push(value);
+          mongoFilters[key] = { $in: value };
+        } else if (typeof value === 'string' && value.includes(',')) {
+          mongoFilters[key] = { $in: value.split(',') };
         } else {
-          conditions.push(`${key} = $${paramIndex}`);
-          params.push(value);
+          mongoFilters[key] = value;
         }
-        paramIndex++;
       }
     });
 
-    return { conditions, params };
+    return mongoFilters;
   },
 
   /**
-   * Build INSERT query with RETURNING
+   * Convert PostgreSQL-style results to MongoDB format
    */
-  buildInsertQuery(
-    table: string,
-    data: Record<string, any>,
-    returning: string = '*'
-  ): { query: string; params: any[] } {
-    const keys = Object.keys(data);
-    const values = Object.values(data);
-    const placeholders = keys.map((_, index) => `$${index + 1}`);
-
-    const query = `
-      INSERT INTO ${table} (${keys.join(', ')})
-      VALUES (${placeholders.join(', ')})
-      RETURNING ${returning}
-    `;
-
-    return { query, params: values };
+  formatResults<T>(results: T[]): { rows: T[]; rowCount: number } {
+    return {
+      rows: results,
+      rowCount: results.length
+    };
   },
 
   /**
-   * Build UPDATE query with WHERE clause
+   * Generate ObjectId
    */
-  buildUpdateQuery(
-    table: string,
-    data: Record<string, any>,
-    whereClause: string,
-    whereParams: any[] = [],
-    returning: string = '*'
-  ): { query: string; params: any[] } {
-    const updates = Object.keys(data).map((key, index) => 
-      `${key} = $${index + 1}`
-    );
-    
-    const query = `
-      UPDATE ${table}
-      SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
-      WHERE ${whereClause}
-      RETURNING ${returning}
-    `;
+  generateId(): string {
+    return new mongoose.Types.ObjectId().toString();
+  },
 
-    const params = [...Object.values(data), ...whereParams];
-    return { query, params };
+  /**
+   * Validate ObjectId
+   */
+  isValidId(id: string): boolean {
+    return mongoose.Types.ObjectId.isValid(id);
   }
 };
 
-// Initialize database connection and handle errors
-pool.on('connect', () => {
-  logger.info('Database connection established');
+// Handle connection events
+mongoose.connection.on('connected', () => {
+  logger.info('Mongoose connected to MongoDB');
 });
 
-pool.on('error', (error) => {
-  logger.error('Database connection error:', error);
+mongoose.connection.on('error', (error) => {
+  logger.error('Mongoose connection error:', error);
+});
+
+mongoose.connection.on('disconnected', () => {
+  logger.warn('Mongoose disconnected from MongoDB');
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
   logger.info('Shutting down database connections...');
-  await db.end();
+  if (db) await db.close();
+  await mongoose.disconnect();
 });
 
 process.on('SIGTERM', async () => {
   logger.info('Shutting down database connections...');
-  await db.end();
+  if (db) await db.close();
+  await mongoose.disconnect();
 });

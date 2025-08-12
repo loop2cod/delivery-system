@@ -92,7 +92,7 @@ export function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
                       <div className="w-8 h-8 bg-accent rounded-xl flex items-center justify-center">
                         <TruckSolidIcon className="w-5 h-5 text-white" />
                       </div>
-                      <span className="text-xl font-bold text-white">UAE Delivery</span>
+                      <span className="text-xl font-bold text-white">GRS Delivery</span>
                     </div>
                   </div>
                   

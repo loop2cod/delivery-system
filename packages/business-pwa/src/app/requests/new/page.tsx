@@ -165,7 +165,7 @@ export default function NewRequestPage() {
             </div>
             <div className="text-right text-sm text-gray-500">
               <p>Request created by: {user?.firstName} {user?.lastName}</p>
-              <p>Role: {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1)}</p>
+              <p>Role: {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}</p>
             </div>
           </div>
         </div>

@@ -4,51 +4,93 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/providers/AdminProvider';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { DriverTable } from '@/components/drivers/DriverTable';
+import { DriversTable } from '@/components/drivers/DriversTable';
 import { DriverModal } from '@/components/drivers/DriverModal';
-import { AssignmentModal } from '@/components/drivers/AssignmentModal';
+import { DriverCreateModal } from '@/components/drivers/DriverCreateModal';
+import { adminAPI, Driver } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
-  PlusIcon,
-  ArrowDownTrayIcon,
-  MapIcon,
-} from '@heroicons/react/24/outline';
-
-interface Driver {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  vehicle: string;
-  licensePlate: string;
-  status: 'available' | 'on_delivery' | 'break' | 'offline';
-  currentLocation: string;
-  completedToday: number;
-  totalDeliveries: number;
-  rating: number;
-  joinedDate: string;
-  avatar?: string;
-  currentDelivery?: {
-    id: string;
-    customer: string;
-    destination: string;
-    estimatedTime: string;
-  };
-}
+  Plus,
+  Download,
+  Users,
+  UserCheck,
+  UserX,
+  TrendingUp,
+  MapPin,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function DriversPage() {
   const { isAuthenticated, isLoading } = useAdmin();
   const router = useRouter();
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
-  const [driverForAssignment, setDriverForAssignment] = useState<Driver | undefined>(undefined);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0,
+  });
+  const [filters, setFilters] = useState({
+    status: '',
+    availability: '',
+    search: '',
+  });
+  const [stats, setStats] = useState({
+    totalDrivers: 0,
+    activeDrivers: 0,
+    availableDrivers: 0,
+    busyDrivers: 0,
+  });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadDrivers();
+    }
+  }, [isAuthenticated, pagination.page, pagination.limit, filters]);
+
+  const loadDrivers = async () => {
+    try {
+      setLoading(true);
+      const response = await adminAPI.getDrivers({
+        page: pagination.page,
+        limit: pagination.limit,
+        status: filters.status === 'all' ? '' : filters.status || undefined,
+        availability: filters.availability === 'all' ? '' : filters.availability || undefined,
+        search: filters.search || undefined,
+      });
+      
+      setDrivers(response.drivers);
+      setPagination(response.pagination);
+      
+      // Calculate stats from the drivers data
+      const activeCount = response.drivers.filter(d => d.status === 'ACTIVE').length;
+      const availableCount = response.drivers.filter(d => d.availability_status === 'AVAILABLE').length;
+      const busyCount = response.drivers.filter(d => d.availability_status === 'BUSY').length;
+      
+      setStats({
+        totalDrivers: response.pagination.total,
+        activeDrivers: activeCount,
+        availableDrivers: availableCount,
+        busyDrivers: busyCount,
+      });
+    } catch (error) {
+      console.error('Failed to load drivers:', error);
+      toast.error('Failed to load drivers');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -64,61 +106,97 @@ export default function DriversPage() {
 
   const handleViewDriver = (driver: Driver) => {
     setSelectedDriver(driver);
-    setIsDriverModalOpen(true);
+    setIsModalOpen(true);
   };
 
   const handleContactDriver = (driver: Driver) => {
     toast.success(`Initiating call to ${driver.name}`);
-    // Implement call functionality
     console.log('Contacting driver:', driver);
   };
 
-  const handleAssignDelivery = (driver: Driver) => {
-    setDriverForAssignment(driver);
-    setIsAssignmentModalOpen(true);
+  const handleUpdateDriverStatus = async (driver: Driver, status: Driver['status']) => {
+    try {
+      await adminAPI.updateDriverStatus(driver.id, status);
+      toast.success(`Driver ${driver.name} status updated to ${status.toLowerCase()}`);
+      setIsModalOpen(false);
+      loadDrivers();
+    } catch (error) {
+      console.error('Failed to update driver status:', error);
+      toast.error('Failed to update driver status');
+    }
+  };
+
+  const handleUpdateDriverAvailability = async (driver: Driver, availability: Driver['availability_status']) => {
+    try {
+      await adminAPI.updateDriverAvailability(driver.id, availability);
+      toast.success(`Driver ${driver.name} availability updated to ${availability.toLowerCase()}`);
+      setIsModalOpen(false);
+      loadDrivers();
+    } catch (error) {
+      console.error('Failed to update driver availability:', error);
+      toast.error('Failed to update driver availability');
+    }
   };
 
   const handleViewLocation = (driver: Driver) => {
     toast.success(`Opening map for ${driver.name}'s location`);
-    // Implement map/location viewing
     console.log('Viewing location for driver:', driver);
   };
 
-  const handleUpdateStatus = (driver: Driver, status: string) => {
-    toast.success(`Updated ${driver.name}'s status to ${status}`);
-    // Implement status update
-    console.log('Updating driver status:', { driver, status });
-    setIsDriverModalOpen(false);
+  const handleCreateDriver = () => {
+    setIsCreateModalOpen(true);
   };
 
-  const handleAssignmentComplete = (driverId: string, inquiryId: string) => {
-    toast.success(`Delivery assigned successfully!`);
-    // Implement assignment logic
-    console.log('Assigning delivery:', { driverId, inquiryId });
-    setIsAssignmentModalOpen(false);
-    setDriverForAssignment(undefined);
-  };
-
-  const handleAddDriver = () => {
-    toast.success('Add driver functionality coming soon');
-    // Implement add driver modal
+  const handleDriverCreated = () => {
+    loadDrivers();
   };
 
   const handleExportDrivers = () => {
-    toast.success('Exporting driver data to CSV');
-    // Implement export functionality
+    toast.success('Exporting drivers to CSV');
   };
 
   const handleViewMap = () => {
     toast.success('Opening driver location map');
-    // Implement map view
   };
 
-  const stats = [
-    { name: 'Total Drivers', value: '24', change: '+2', changeType: 'increase' },
-    { name: 'Available Now', value: '18', change: '+5', changeType: 'increase' },
-    { name: 'On Delivery', value: '4', change: '-1', changeType: 'decrease' },
-    { name: 'Average Rating', value: '4.7', change: '+0.1', changeType: 'increase' },
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handlePageChange = (page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  };
+
+  const statsDisplay = [
+    { 
+      name: 'Total Drivers', 
+      value: stats.totalDrivers.toString(), 
+      icon: Users,
+      change: '+8%', 
+      changeType: 'increase' as const
+    },
+    { 
+      name: 'Active Drivers', 
+      value: stats.activeDrivers.toString(), 
+      icon: UserCheck,
+      change: '+12%', 
+      changeType: 'increase' as const
+    },
+    { 
+      name: 'Available Now', 
+      value: stats.availableDrivers.toString(), 
+      icon: TrendingUp,
+      change: '+5%', 
+      changeType: 'increase' as const
+    },
+    { 
+      name: 'Currently Busy', 
+      value: stats.busyDrivers.toString(), 
+      icon: UserX,
+      change: '-3%', 
+      changeType: 'decrease' as const
+    },
   ];
 
   return (
@@ -131,106 +209,89 @@ export default function DriversPage() {
               Driver Management
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Manage delivery drivers, assignments, and performance
+              Manage delivery drivers and their availability
             </p>
           </div>
           
           <div className="flex items-center space-x-3">
-            <button
-              onClick={handleViewMap}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-            >
-              <MapIcon className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={handleViewMap}>
+              <MapPin className="h-4 w-4 mr-2" />
               Map View
-            </button>
+            </Button>
             
-            <button
-              onClick={handleExportDrivers}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-            >
-              <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
+            <Button variant="outline" onClick={handleExportDrivers}>
+              <Download className="h-4 w-4 mr-2" />
               Export
-            </button>
+            </Button>
             
-            <button
-              onClick={() => setIsAssignmentModalOpen(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"
-            >
-              Assign Delivery
-            </button>
-            
-            <button
-              onClick={handleAddDriver}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
+            <Button onClick={handleCreateDriver}>
+              <Plus className="h-4 w-4 mr-2" />
               Add Driver
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((item) => (
-            <div
-              key={item.name}
-              className="bg-white overflow-hidden shadow-sm rounded-lg"
-            >
-              <div className="p-5">
+          {statsDisplay.map((item) => (
+            <Card key={item.name}>
+              <CardContent className="p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="text-sm font-medium text-gray-500 truncate">
-                      {item.name}
-                    </div>
+                    <item.icon className="h-8 w-8 text-primary" />
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-muted-foreground truncate">
+                        {item.name}
+                      </dt>
+                      <dd className="flex items-baseline">
+                        <div className="text-2xl font-semibold text-foreground">
+                          {item.value}
+                        </div>
+                        <div className={`ml-2 flex items-baseline text-sm font-semibold ${
+                          item.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {item.change}
+                        </div>
+                      </dd>
+                    </dl>
                   </div>
                 </div>
-                <div className="mt-1 flex items-baseline">
-                  <div className="text-2xl font-semibold text-gray-900">
-                    {item.value}
-                  </div>
-                  <div className={`ml-2 flex items-baseline text-sm font-semibold ${
-                    item.changeType === 'increase' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {item.change}
-                  </div>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
         {/* Drivers Table */}
-        <div className="bg-white shadow-sm rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <DriverTable
-              onViewDriver={handleViewDriver}
-              onContactDriver={handleContactDriver}
-              onAssignDelivery={handleAssignDelivery}
-              onViewLocation={handleViewLocation}
-            />
-          </div>
-        </div>
-
-        {/* Driver Detail Modal */}
-        <DriverModal
-          isOpen={isDriverModalOpen}
-          onClose={() => setIsDriverModalOpen(false)}
-          driver={selectedDriver}
+        <DriversTable
+          drivers={drivers}
+          loading={loading}
+          pagination={pagination}
+          filters={filters}
+          onViewDriver={handleViewDriver}
           onContactDriver={handleContactDriver}
-          onAssignDelivery={handleAssignDelivery}
           onViewLocation={handleViewLocation}
-          onUpdateStatus={handleUpdateStatus}
+          onFilterChange={handleFilterChange}
+          onPageChange={handlePageChange}
         />
 
-        {/* Assignment Modal */}
-        <AssignmentModal
-          isOpen={isAssignmentModalOpen}
-          onClose={() => {
-            setIsAssignmentModalOpen(false);
-            setDriverForAssignment(undefined);
-          }}
-          selectedDriver={driverForAssignment}
-          onAssignDelivery={handleAssignmentComplete}
+        {/* Driver Modal */}
+        <DriverModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          driver={selectedDriver}
+          onContactDriver={handleContactDriver}
+          onUpdateStatus={handleUpdateDriverStatus}
+          onUpdateAvailability={handleUpdateDriverAvailability}
+          onViewLocation={handleViewLocation}
+        />
+
+        {/* Create Driver Modal */}
+        <DriverCreateModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onDriverCreated={handleDriverCreated}
         />
       </div>
     </AdminLayout>

@@ -32,6 +32,7 @@ const redisClient: RedisClientType = createClient(redisConfig);
 // Redis service class
 export class RedisService {
   private client: RedisClientType;
+  private connected: boolean = false;
 
   constructor(client: RedisClientType) {
     this.client = client;
@@ -44,9 +45,11 @@ export class RedisService {
     try {
       if (!this.client.isOpen) {
         await this.client.connect();
+        this.connected = true;
         logger.info('Redis connected successfully');
       }
     } catch (error) {
+      this.connected = false;
       if (process.env.NODE_ENV === 'development') {
         logger.warn('Redis connection failed in development - continuing without Redis');
       } else {
@@ -59,7 +62,7 @@ export class RedisService {
    * Check if Redis is available
    */
   isAvailable(): boolean {
-    return this.client.isOpen;
+    return this.connected && this.client.isOpen;
   }
 
   /**
@@ -119,6 +122,9 @@ export class RedisService {
    * Delete one or more keys
    */
   async del(...keys: string[]): Promise<number> {
+    if (!this.isAvailable()) {
+      return 0; // Return 0 when Redis is unavailable
+    }
     return this.client.del(keys);
   }
 
@@ -134,6 +140,9 @@ export class RedisService {
    * Set expiration time for a key
    */
   async expire(key: string, seconds: number): Promise<boolean> {
+    if (!this.isAvailable()) {
+      return false; // Return false when Redis is unavailable
+    }
     const result = await this.client.expire(key, seconds);
     return result;
   }
@@ -149,6 +158,9 @@ export class RedisService {
    * Increment a numeric value
    */
   async incr(key: string): Promise<number> {
+    if (!this.isAvailable()) {
+      return 1; // Return 1 as if it's the first increment when Redis is unavailable
+    }
     return this.client.incr(key);
   }
 
@@ -308,6 +320,21 @@ export class RedisService {
 // Create Redis service instance
 export const redis = new RedisService(redisClient);
 
+// Connect to Redis function expected by server
+export async function connectRedis(): Promise<void> {
+  try {
+    // Connect the RedisService instance, not just the raw client
+    await redis.connect();
+    console.log('Redis connection successful');
+  } catch (error) {
+    console.warn('Redis connection failed in development - continuing without Redis:', error.message);
+    // In development, don't throw error to allow testing without Redis
+    if (process.env.NODE_ENV === 'production') {
+      throw error;
+    }
+  }
+}
+
 // Cache utilities for PWA optimization
 export const cacheUtils = {
   // Cache keys
@@ -451,7 +478,7 @@ async function initializeRedis() {
   }
 }
 
-initializeRedis();
+// initializeRedis(); // Let server handle connection via connectRedis()
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

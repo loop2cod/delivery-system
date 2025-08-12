@@ -106,62 +106,6 @@ export function Features() {
             </div>
           ))}
         </div>
-
-        {/* Technology Showcase */}
-        <div className="mt-24">
-          <div className="glass-card text-center">
-            <div className="mb-8">
-              <h3 className="text-2xl md:text-3xl font-bold gradient-text mb-4">
-                Powered by Advanced Technology
-              </h3>
-              <p className="text-muted-foreground max-w-2xl mx-auto">
-                Our platform leverages the latest technologies to provide you with 
-                the most reliable and efficient delivery experience in the UAE.
-              </p>
-            </div>
-
-            {/* Tech Stack Icons */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <DevicePhoneMobileIcon className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-foreground">PWA Technology</div>
-                <div className="text-xs text-muted-foreground mt-1">Native App Experience</div>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-accent rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <MapPinIcon className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-foreground">GPS Tracking</div>
-                <div className="text-xs text-muted-foreground mt-1">Real-Time Location</div>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-success rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <CloudIcon className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-foreground">Cloud Platform</div>
-                <div className="text-xs text-muted-foreground mt-1">Always Available</div>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <ShieldCheckIcon className="w-8 h-8 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-foreground">Secure Platform</div>
-                <div className="text-xs text-muted-foreground mt-1">Bank-Level Security</div>
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <button className="btn-outline">
-                Learn More About Our Technology
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </section>
   );

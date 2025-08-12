@@ -17,10 +17,7 @@ export default function HomePage() {
         <SolutionHero />
         <SystemShowcase />
         <Features />
-        <Benefits />
-        <Statistics />
         <ClientTestimonials />
-        <PricingPlans />
         <SolutionCTA />
       </main>
       <Footer />

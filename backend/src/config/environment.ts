@@ -9,21 +9,24 @@ export const config = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   HOST: process.env.HOST || '0.0.0.0',
   PORT: parseInt(process.env.PORT || '3000', 10),
+  API_HOST: process.env.API_HOST || '0.0.0.0',
+  API_PORT: parseInt(process.env.API_PORT || '3000', 10),
 
-  // Database Configuration
-  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://delivery_user:delivery_pass_2025@localhost:5432/delivery_uae_dev',
-  DB_HOST: process.env.DB_HOST || 'localhost',
-  DB_PORT: parseInt(process.env.DB_PORT || '5432', 10),
-  DB_NAME: process.env.DB_NAME || 'delivery_uae_dev',
-  DB_USER: process.env.DB_USER || 'delivery_user',
-  DB_PASSWORD: process.env.DB_PASSWORD || 'delivery_pass_2025',
-  DB_MAX_CONNECTIONS: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),
+  // MongoDB Configuration
+  MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017/delivery_uae_dev',
+  MONGODB_HOST: process.env.MONGODB_HOST || 'localhost',
+  MONGODB_PORT: parseInt(process.env.MONGODB_PORT || '27017', 10),
+  MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'delivery_uae_dev',
+  MONGODB_USER: process.env.MONGODB_USER || '',
+  MONGODB_PASSWORD: process.env.MONGODB_PASSWORD || '',
+  MONGODB_AUTH_SOURCE: process.env.MONGODB_AUTH_SOURCE || 'admin',
+  MONGODB_MAX_POOL_SIZE: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '50', 10),
 
   // Redis Configuration
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
   REDIS_HOST: process.env.REDIS_HOST || 'localhost',
   REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379', 10),
-  REDIS_PASSWORD: process.env.REDIS_PASSWORD || 'redis_pass_2025',
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD || '',
 
   // JWT Configuration
   JWT_SECRET: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
@@ -57,7 +60,7 @@ export const config = {
   SMS_PROVIDER_URL: process.env.SMS_PROVIDER_URL || '',
 
   // Rate Limiting
-  RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
   RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW || '1 minute',
 
   // CORS Origins
@@ -92,6 +95,9 @@ export const config = {
   // Development/Testing
   ENABLE_SWAGGER: process.env.ENABLE_SWAGGER !== 'false',
   ENABLE_PLAYGROUND: process.env.ENABLE_PLAYGROUND === 'true',
+  ENABLE_REQUEST_LOGGING: process.env.ENABLE_REQUEST_LOGGING !== 'false',
+  ENABLE_METRICS: process.env.ENABLE_METRICS !== 'false',
+  TRUST_PROXY: process.env.TRUST_PROXY === 'true',
   MOCK_EXTERNAL_SERVICES: process.env.MOCK_EXTERNAL_SERVICES === 'true'
 };
 
@@ -103,7 +109,7 @@ const requiredEnvVars = [
 
 if (config.NODE_ENV === 'production') {
   requiredEnvVars.push(
-    'DATABASE_URL',
+    'MONGODB_URL',
     'REDIS_URL',
     'VAPID_PUBLIC_KEY',
     'VAPID_PRIVATE_KEY'

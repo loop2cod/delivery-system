@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { ProfileCompletionBanner } from './ProfileCompletionBanner';
 
 interface BusinessLayoutProps {
   children: React.ReactNode;
@@ -18,6 +19,7 @@ export function BusinessLayout({ children }: BusinessLayoutProps) {
       
       <div className="lg:pl-72">
         <Header setSidebarOpen={setSidebarOpen} />
+        <ProfileCompletionBanner />
         
         <main className="py-10">
           <div className="px-4 sm:px-6 lg:px-8">

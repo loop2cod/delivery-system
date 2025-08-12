@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,9 +12,11 @@ import {
   ClockIcon,
   CurrencyDollarIcon,
   DocumentTextIcon,
+  BuildingOffice2Icon,
 } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 
 const deliveryRequestSchema = z.object({
   serviceType: z.string().min(1, 'Service type is required'),
@@ -65,6 +67,22 @@ const priorityOptions = [
   { value: 'urgent', label: 'Urgent', description: 'Immediate attention', color: 'bg-red-100 text-red-800' },
 ];
 
+interface Company {
+  id: string;
+  name: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  street_address: string;
+  area: string;
+  city: string;
+  emirate: string;
+  postal_code?: string;
+  country: string;
+  industry: string;
+  monthly_volume_estimate?: number;
+}
+
 interface NewRequestFormProps {
   onSubmit: (data: DeliveryRequestFormData) => void;
   onCancel: () => void;
@@ -74,6 +92,8 @@ interface NewRequestFormProps {
 export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: NewRequestFormProps) {
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [loadingCompany, setLoadingCompany] = useState(false);
   const totalSteps = 4;
 
   const {
@@ -103,6 +123,67 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
 
   const watchedValues = watch();
 
+  // Load company profile on component mount
+  useEffect(() => {
+    loadCompanyProfile();
+  }, []);
+
+  // Auto-fill pickup details when company profile is loaded and pickup details are empty
+  useEffect(() => {
+    if (company && !watchedValues.pickupDetails?.contactName && !watchedValues.pickupDetails?.phone && !watchedValues.pickupDetails?.address) {
+      autoFillPickupDetailsQuiet();
+    }
+  }, [company]);
+
+  const loadCompanyProfile = async () => {
+    try {
+      setLoadingCompany(true);
+      const response = await axios.get('/api/business/profile');
+      setCompany(response.data.company);
+    } catch (error) {
+      console.error('Failed to load company profile:', error);
+      // Don't show error toast as this is not critical functionality
+    } finally {
+      setLoadingCompany(false);
+    }
+  };
+
+  // Auto-fill pickup details from company profile (with toast)
+  const autoFillPickupDetails = () => {
+    if (!company) {
+      toast.error('Company profile not available');
+      return;
+    }
+
+    fillPickupDetailsFromCompany();
+    toast.success('Pickup details filled from company profile');
+  };
+
+  // Auto-fill pickup details from company profile (without toast)
+  const autoFillPickupDetailsQuiet = () => {
+    if (!company) return;
+    fillPickupDetailsFromCompany();
+  };
+
+  // Common function to fill pickup details from company
+  const fillPickupDetailsFromCompany = () => {
+    if (!company) return;
+
+    // Format address from company profile
+    const fullAddress = [
+      company.street_address,
+      company.area,
+      company.city,
+      company.emirate.replace('_', ' '),
+      company.postal_code,
+      company.country
+    ].filter(Boolean).join(', ');
+
+    setValue('pickupDetails.contactName', company.contact_person);
+    setValue('pickupDetails.phone', company.phone);
+    setValue('pickupDetails.address', fullAddress);
+  };
+
   // Calculate estimated cost based on form data
   const calculateEstimatedCost = () => {
     const serviceType = watchedValues.serviceType;
@@ -112,13 +193,14 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     let baseCost = 35; // Base cost
     
     // Service type multiplier
-    const serviceMultiplier = {
+    const serviceMultipliers = {
       same_day: 1.0,
       express: 1.5,
       document: 0.8,
       fragile: 1.3,
       inter_emirate: 2.0,
-    }[serviceType as keyof typeof serviceMultiplier] || 1.0;
+    };
+    const serviceMultiplier = serviceMultipliers[serviceType as keyof typeof serviceMultipliers] || 1.0;
     
     // Priority multiplier
     const priorityMultiplier = {
@@ -287,9 +369,22 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     <div className="space-y-8">
       {/* Pickup Details */}
       <div className="bg-green-50 rounded-lg p-6">
-        <div className="flex items-center mb-4">
-          <MapPinIcon className="w-5 h-5 text-green-600 mr-2" />
-          <h3 className="text-lg font-medium text-gray-900">Pickup Details</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <MapPinIcon className="w-5 h-5 text-green-600 mr-2" />
+            <h3 className="text-lg font-medium text-gray-900">Pickup Details</h3>
+          </div>
+          {company && (
+            <button
+              type="button"
+              onClick={autoFillPickupDetails}
+              disabled={loadingCompany}
+              className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <BuildingOffice2Icon className="w-3 h-3 mr-1" />
+              {loadingCompany ? 'Loading...' : 'Use Company Address'}
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

@@ -65,7 +65,7 @@ export default function DashboardPage() {
               <div className="mt-4 flex items-center space-x-4 text-sm text-white/80">
                 <span>Industry: {user?.company?.industry}</span>
                 <span>•</span>
-                <span>Role: {user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1)}</span>
+                <span>Role: {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}</span>
               </div>
             </div>
             <div className="hidden md:block">

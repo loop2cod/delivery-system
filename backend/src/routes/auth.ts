@@ -56,6 +56,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     const ip = request.ip;
     const userAgent = request.headers['user-agent'] || '';
 
+
     const result = await AuthService.login(loginData, ip, userAgent);
 
     // Set HTTP-only cookie for web clients
@@ -375,3 +376,5 @@ export async function authRoutes(fastify: FastifyInstance) {
     };
   }));
 }
+
+export default authRoutes;

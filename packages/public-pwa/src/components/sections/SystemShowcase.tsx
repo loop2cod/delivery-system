@@ -82,7 +82,7 @@ const systemApps: SystemApp[] = [
   },
   {
     id: 'driver',
-    title: 'Driver Mobile App',
+    title: 'Driver App',
     description: 'Advanced GPS tracking and route optimization for delivery drivers',
     icon: MapPin,
     color: 'text-red-600',
@@ -92,7 +92,7 @@ const systemApps: SystemApp[] = [
       'AI-powered route optimization',
       'QR code package scanning',
       'Digital proof of delivery',
-      'Offline-first mobile experience'
+      'Offline-first experience'
     ],
     stats: [
       { label: 'Route Efficiency', value: '+30%' },
@@ -113,7 +113,7 @@ export function SystemShowcase() {
         {/* Section Header */}
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold text-uae-navy mb-4">
-            Four Integrated Applications, One Complete Solution
+            Integrated Applications, One Complete Solution
           </h2>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Our delivery management system consists of four specialized PWA applications 
@@ -322,7 +322,7 @@ export function SystemShowcase() {
               </div>
 
               {/* Floating Notification */}
-              <div className="absolute -top-4 -right-4 bg-green-500 text-white p-3 rounded-xl shadow-lg max-w-xs">
+              <div className="absolute -top-10 -right-4 bg-green-500 text-white p-3 rounded-xl shadow-lg max-w-xs">
                 <div className="text-sm font-semibold">System Update</div>
                 <div className="text-xs opacity-90">All apps synchronized</div>
               </div>
@@ -335,7 +335,7 @@ export function SystemShowcase() {
           <div className="text-center mb-8">
             <h3 className="text-2xl lg:text-3xl font-bold mb-4">Seamless Integration Benefits</h3>
             <p className="text-blue-100 text-lg">
-              All four applications work together as one unified system
+              All applications work together as one unified system
             </p>
           </div>
 

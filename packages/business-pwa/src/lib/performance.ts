@@ -2,7 +2,16 @@
  * Performance tracking initialization for Business PWA
  */
 
-import { createPWAMetrics, type PWAMetricsConfig } from '@/shared/performance/pwa-metrics';
+// TODO: Add shared performance tracking when available
+// import { createPWAMetrics, type PWAMetricsConfig } from '@/shared/performance/pwa-metrics';
+
+interface PWAMetricsConfig {
+  appName: string;
+  version: string;
+  endpoint: string;
+  enableAutoTracking: boolean;
+  enableOptimizations: boolean;
+}
 
 const config: PWAMetricsConfig = {
   appName: 'business-pwa',
@@ -12,8 +21,18 @@ const config: PWAMetricsConfig = {
   enableOptimizations: true
 };
 
+// Mock implementation until shared performance module is available
+const mockMetrics = {
+  trackDeliveryMetric: (...args: any[]) => {},
+  trackFeatureUsage: (...args: any[]) => {},
+  trackInteraction: (...args: any[]) => {},
+  trackAPICall: (...args: any[]) => {},
+  trackPushNotification: (...args: any[]) => {},
+  trackPageView: (...args: any[]) => {},
+};
+
 // Initialize metrics for Business PWA
-export const businessMetrics = createPWAMetrics(config);
+export const businessMetrics = mockMetrics;
 
 // Business PWA specific tracking functions
 export const trackDeliveryRequest = (success: boolean, deliveryType: string) => {

@@ -65,7 +65,7 @@ const testimonials: Testimonial[] = [
     company: 'Abu Dhabi Couriers',
     avatar: 'M',
     rating: 5,
-    quote: 'The driver mobile app is intuitive and powerful. Route optimization helps our drivers complete 40% more deliveries per day. The GPS accuracy is incredible - our customers always know exactly where their package is.',
+    quote: 'The driver app is intuitive and powerful. Route optimization helps our drivers complete 40% more deliveries per day. The GPS accuracy is incredible - our customers always know exactly where their package is.',
     results: [
       { metric: 'Delivery Increase', value: '40%', description: 'More deliveries per driver' },
       { metric: 'Fuel Savings', value: '30%', description: 'Reduced fuel costs' },
@@ -290,23 +290,6 @@ export function ClientTestimonials() {
               }`}
             />
           ))}
-        </div>
-
-        {/* Case Study CTA */}
-        <div className="mt-16 bg-gradient-to-r from-uae-red to-red-700 rounded-2xl p-8 lg:p-12 text-white text-center">
-          <h3 className="text-3xl font-bold mb-4">Want to See Your Success Story Here?</h3>
-          <p className="text-red-100 text-lg mb-8 max-w-2xl mx-auto">
-            Join these successful UAE businesses and start your transformation journey today. 
-            Get a personalized demo and see how our solution can work for your specific needs.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-white text-uae-red hover:bg-gray-100 px-8 py-4 rounded-lg font-semibold text-lg transition-colors">
-              Request Case Study
-            </button>
-            <button className="border-2 border-white text-white hover:bg-white hover:text-uae-red px-8 py-4 rounded-lg font-semibold text-lg transition-colors">
-              Schedule Demo
-            </button>
-          </div>
         </div>
       </div>
     </section>

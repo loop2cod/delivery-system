@@ -17,7 +17,7 @@ interface StatCard {
   value: string;
   change: string;
   changeType: 'increase' | 'decrease' | 'neutral';
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: React.ForwardRefExoticComponent<Omit<React.SVGProps<SVGSVGElement>, "ref"> & { title?: string | undefined; titleId?: string | undefined; } & React.RefAttributes<SVGSVGElement>>;
   color: string;
   description: string;
 }

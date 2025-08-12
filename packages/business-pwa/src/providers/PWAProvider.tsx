@@ -38,8 +38,8 @@ export function PWAProvider({ children }: PWAProviderProps) {
     // Check if app is installed
     const checkInstalled = () => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      const isInWebAppChrome = 'standalone' in window.navigator && window.navigator.standalone;
-      setIsInstalled(isStandalone || isInWebAppChrome);
+      const isInWebAppChrome = 'standalone' in window.navigator && (window.navigator as any).standalone;
+      setIsInstalled(isStandalone || Boolean(isInWebAppChrome));
     };
 
     // Listen for beforeinstallprompt event
@@ -110,7 +110,7 @@ export function PWAProvider({ children }: PWAProviderProps) {
       window.location.reload();
     });
 
-    if (wb.waiting) {
+    if ((wb as any).waiting) {
       wb.messageSkipWaiting();
     }
   };

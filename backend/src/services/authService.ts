@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { UserRole, UserStatus } from '@delivery-uae/shared';
 import { db } from '../config/database';
@@ -6,6 +7,8 @@ import { redis, cacheUtils } from '../config/redis';
 import { config } from '../config/environment';
 import { logger, securityLogger } from '../utils/logger';
 import { ValidationError, ConflictError, NotFoundError } from '../middleware/errorHandler';
+import { User, CompanyUser, Driver, UserSession } from '../models';
+import mongoose from 'mongoose';
 
 export interface LoginRequest {
   email: string;
@@ -62,16 +65,9 @@ export class AuthService {
     }
 
     // Find user with company and driver info
-    const userQuery = `
-      SELECT u.id, u.email, u.password_hash, u.name, u.role, u.status,
-             cu.company_id, d.id as driver_id
-      FROM users u
-      LEFT JOIN company_users cu ON u.id = cu.user_id AND cu.is_primary = true
-      LEFT JOIN drivers d ON u.id = d.user_id
-      WHERE LOWER(u.email) = LOWER($1)
-    `;
-
-    const user = await db.queryOne(userQuery, [email]);
+    const user = await User.findOne({ 
+      email: email.toLowerCase() 
+    }).lean();
 
     if (!user) {
       // Increment failed attempts
@@ -82,14 +78,31 @@ export class AuthService {
       throw new ValidationError('Invalid email or password');
     }
 
+    // Get company and driver info separately
+    const companyUser = await CompanyUser.findOne({ 
+      user_id: user._id, 
+      is_primary: true 
+    }).lean();
+    
+    const driver = await Driver.findOne({ 
+      user_id: user._id 
+    }).lean();
+
+    const userWithRelations = {
+      ...user,
+      id: user._id.toString(),
+      company_id: companyUser?.company_id?.toString() || null,
+      driver_id: driver?._id?.toString() || null
+    };
+
     // Check if user is active
-    if (user.status !== UserStatus.ACTIVE) {
+    if (userWithRelations.status !== UserStatus.ACTIVE) {
       securityLogger.auth(email, false, ip, userAgent);
       throw new ValidationError('Account is not active. Please contact support.');
     }
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const isValidPassword = await bcrypt.compare(password, userWithRelations.password_hash);
     
     if (!isValidPassword) {
       // Increment failed attempts
@@ -104,27 +117,26 @@ export class AuthService {
     await redis.del(failedKey);
 
     // Generate tokens
-    const { token, refreshToken } = await this.generateTokens(user.id);
+    const { token, refreshToken } = await this.generateTokens(userWithRelations.id);
 
     // Create session
-    await this.createSession(token, user, pwaType, deviceInfo, ip);
+    await this.createSession(token, userWithRelations, refreshToken, pwaType, deviceInfo, ip);
 
     // Update last login
-    await db.query(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
-      [user.id]
-    );
+    await User.findByIdAndUpdate(userWithRelations._id, {
+      last_login: new Date()
+    });
 
     // Cache user data
     await redis.set(
-      cacheUtils.keys.user(user.id),
+      cacheUtils.keys.user(userWithRelations.id),
       {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        company_id: user.company_id,
-        driver_id: user.driver_id
+        id: userWithRelations.id,
+        email: userWithRelations.email,
+        name: userWithRelations.name,
+        role: userWithRelations.role,
+        company_id: userWithRelations.company_id,
+        driver_id: userWithRelations.driver_id
       },
       cacheUtils.ttl.MEDIUM
     );
@@ -133,12 +145,12 @@ export class AuthService {
 
     return {
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        companyId: user.company_id,
-        driverId: user.driver_id
+        id: userWithRelations.id,
+        email: userWithRelations.email,
+        name: userWithRelations.name,
+        role: userWithRelations.role,
+        companyId: userWithRelations.company_id,
+        driverId: userWithRelations.driver_id
       },
       token,
       refreshToken,
@@ -175,10 +187,9 @@ export class AuthService {
     }
 
     // Check if user already exists
-    const existingUser = await db.queryOne(
-      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
-      [email]
-    );
+    const existingUser = await User.findOne({
+      email: email.toLowerCase()
+    }).lean();
 
     if (existingUser) {
       throw new ConflictError('User with this email already exists');
@@ -188,17 +199,20 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS);
 
     // Create user
-    const newUser = await db.queryOne(`
-      INSERT INTO users (email, password_hash, name, phone, role, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, email, name, role
-    `, [email, passwordHash, name, phone, role, UserStatus.ACTIVE]);
+    const newUser = await User.create({
+      email: email.toLowerCase(),
+      password_hash: passwordHash,
+      name,
+      phone,
+      role,
+      status: UserStatus.ACTIVE
+    });
 
     // Generate tokens
     const { token, refreshToken } = await this.generateTokens(newUser.id);
 
     // Create session
-    await this.createSession(token, newUser, 'public', {}, '');
+    await this.createSession(token, newUser, refreshToken, 'public', {}, '');
 
     logger.info('User registered', {
       userId: newUser.id,
@@ -227,20 +241,28 @@ export class AuthService {
       throw new ValidationError('Refresh token is required');
     }
 
-    // Find session by refresh token
+    // Find sessions that haven't expired
     const sessionQuery = `
-      SELECT s.user_id, s.token_hash, u.email, u.name, u.role, u.status,
+      SELECT s.user_id, s.token_hash, s.refresh_token_hash, u.email, u.name, u.role, u.status,
              cu.company_id, d.id as driver_id
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN company_users cu ON u.id = cu.user_id AND cu.is_primary = true
       LEFT JOIN drivers d ON u.id = d.user_id
-      WHERE s.refresh_token_hash = $1 AND s.expires_at > CURRENT_TIMESTAMP
+      WHERE s.expires_at > CURRENT_TIMESTAMP
     `;
 
-    const session = await db.queryOne(sessionQuery, [
-      await bcrypt.hash(refreshTokenValue, 10)
-    ]);
+    const sessionsResult = await db.query(sessionQuery);
+    const sessions = sessionsResult.rows;
+    
+    // Find the session with matching refresh token
+    let session = null;
+    for (const s of sessions) {
+      if (await bcrypt.compare(refreshTokenValue, s.refresh_token_hash)) {
+        session = s;
+        break;
+      }
+    }
 
     if (!session) {
       throw new ValidationError('Invalid or expired refresh token');
@@ -254,7 +276,7 @@ export class AuthService {
     // Generate new tokens
     const { token, refreshToken } = await this.generateTokens(session.user_id);
 
-    // Update session
+    // Update session with new token hashes
     await db.query(`
       UPDATE user_sessions 
       SET token_hash = $1, refresh_token_hash = $2, last_used_at = CURRENT_TIMESTAMP
@@ -263,7 +285,7 @@ export class AuthService {
       await bcrypt.hash(token, 10),
       await bcrypt.hash(refreshToken, 10),
       session.user_id,
-      await bcrypt.hash(refreshTokenValue, 10)
+      session.refresh_token_hash // Use the existing hash to identify the session
     ]);
 
     // Update session cache
@@ -328,16 +350,14 @@ export class AuthService {
   /**
    * Generate JWT and refresh tokens
    */
-  private static async generateTokens(userId: string): Promise<{
+  private static async generateTokens(userId: string, fastifyInstance?: any): Promise<{
     token: string;
     refreshToken: string;
   }> {
-    // Generate JWT token
-    const payload = { userId, iat: Math.floor(Date.now() / 1000) };
-    const token = await new Promise<string>((resolve, reject) => {
-      // Note: This would need to be implemented with the Fastify instance
-      // For now, we'll use a placeholder
-      resolve('jwt-token-placeholder');
+    // Generate JWT token using same method as Fastify JWT
+    const payload = { userId };
+    const token = jwt.sign(payload, config.JWT_SECRET, {
+      expiresIn: config.JWT_EXPIRES_IN
     });
 
     // Generate refresh token
@@ -352,35 +372,29 @@ export class AuthService {
   private static async createSession(
     token: string,
     user: any,
+    refreshToken: string,
     pwaType?: string,
     deviceInfo?: any,
     ip?: string
   ): Promise<void> {
     const tokenHash = await bcrypt.hash(token, 10);
-    const refreshToken = randomBytes(32).toString('hex');
     const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
     // Store session in database
-    await db.query(`
-      INSERT INTO user_sessions (
-        user_id, token_hash, refresh_token_hash, pwa_type, 
-        device_info, ip_address, expires_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [
-      user.id,
-      tokenHash,
-      refreshTokenHash,
-      pwaType || 'unknown',
-      JSON.stringify(deviceInfo || {}),
-      ip,
-      new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
-    ]);
+    await UserSession.create({
+      user_id: user._id || user.id,
+      token_hash: tokenHash,
+      refresh_token_hash: refreshTokenHash,
+      pwa_type: pwaType || 'unknown',
+      device_info: deviceInfo || {},
+      ip_address: ip,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    });
 
     // Cache session
     await redis.set(
       cacheUtils.keys.session(token),
-      { userId: user.id, refreshToken },
+      { userId: user.id || user._id.toString(), refreshToken },
       cacheUtils.ttl.LONG
     );
   }
@@ -393,24 +407,32 @@ export class AuthService {
     let user = await redis.get(cacheUtils.keys.user(userId), true);
 
     if (!user) {
-      // Fetch from database
-      const userQuery = `
-        SELECT u.id, u.email, u.name, u.role, u.status, 
-               u.created_at, u.last_login,
-               cu.company_id, c.name as company_name,
-               d.id as driver_id, d.rating, d.total_deliveries
-        FROM users u
-        LEFT JOIN company_users cu ON u.id = cu.user_id AND cu.is_primary = true
-        LEFT JOIN companies c ON cu.company_id = c.id
-        LEFT JOIN drivers d ON u.id = d.user_id
-        WHERE u.id = $1
-      `;
+      // Fetch from database with populate
+      const userDoc = await User.findById(userId).lean();
 
-      user = await db.queryOne(userQuery, [userId]);
-
-      if (!user) {
+      if (!userDoc) {
         throw new NotFoundError('User not found');
       }
+
+      // Get company and driver info
+      const companyUser = await CompanyUser.findOne({ 
+        user_id: userDoc._id, 
+        is_primary: true 
+      }).populate('company_id', 'name').lean();
+      
+      const driver = await Driver.findOne({ 
+        user_id: userDoc._id 
+      }).lean();
+
+      user = {
+        ...userDoc,
+        id: userDoc._id.toString(),
+        company_id: companyUser?.company_id?._id?.toString() || null,
+        company_name: companyUser?.company_id?.name || null,
+        driver_id: driver?._id?.toString() || null,
+        rating: driver?.rating || null,
+        total_deliveries: driver?.total_deliveries || null
+      };
 
       // Cache user data
       await redis.set(

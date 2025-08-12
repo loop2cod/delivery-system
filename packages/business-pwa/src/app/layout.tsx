@@ -10,8 +10,6 @@ export const metadata: Metadata = {
   title: 'UAE Delivery Business Portal',
   description: 'Business portal for managing company delivery requests and operations',
   manifest: '/manifest.json',
-  themeColor: '#142C4F',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
   icons: {
     icon: [
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
@@ -21,6 +19,14 @@ export const metadata: Metadata = {
       { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
     ],
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#142C4F',
 };
 
 export default function RootLayout({

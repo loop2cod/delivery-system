@@ -3,7 +3,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 // Temporary direct import until shared module build issues are resolved
-import { QRCodeManager, QRCodeData } from '../../shared/src/qr-utils';
+import { QRCodeManager, QRCodeData } from '../../../shared/src/qr-utils';
 
 interface QRGenerationRequest {
   type: 'package' | 'delivery' | 'inquiry' | 'tracking';

@@ -147,7 +147,7 @@ export default function LoginPage() {
 
           <div className="text-center space-y-2">
             <p className="text-xs text-gray-500">
-              Demo credentials: manager@techcorp.ae / password123
+              Demo credentials: dranju@blitebreal.in / p0qu3364sjtjjzml
             </p>
             <div className="border-t border-gray-200 pt-4">
               <p className="text-sm text-gray-600">

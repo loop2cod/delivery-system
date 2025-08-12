@@ -19,23 +19,18 @@ export function SolutionHero() {
         <div className="absolute top-1/2 right-1/4 w-16 h-16 border border-white/20 rounded-full"></div>
       </div>
       
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-24">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Hero Content */}
           <div className="text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-6 border border-white/20">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium">Trusted by 50+ UAE Businesses</span>
-            </div>
-            
             <h1 className="text-4xl lg:text-6xl font-bold mb-6 leading-tight">
               Complete
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-uae-red to-red-400"> Delivery Management</span>
+              <span className="text-transparent bg-clip-text bg-red-500"> Delivery Management</span>
               <br />
               Solution for UAE
             </h1>
             
-            <p className="text-xl lg:text-2xl text-blue-100 mb-8 leading-relaxed max-w-2xl">
+            <p className="text-sm lg:text-xl text-blue-100 mb-8 leading-relaxed max-w-2xl">
               Transform your delivery business with our comprehensive platform. Real-time GPS tracking, 
               intelligent route optimization, and seamless customer experience—all in one solution.
             </p>
@@ -47,30 +42,20 @@ export function SolutionHero() {
               >
                 Request Free Demo <ArrowRight className="w-5 h-5" />
               </Link>
-              <button 
-                className="border-2 border-white text-white hover:bg-white hover:text-uae-navy px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2"
-                onClick={() => {
-                  // Scroll to video demo section
-                  document.getElementById('demo-video')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-              >
-                <Play className="w-5 h-5" />
-                Watch Demo
-              </button>
             </div>
 
             {/* Key Stats */}
             <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/20">
               <div className="text-center">
-                <div className="text-2xl lg:text-3xl font-bold text-uae-red mb-1">500K+</div>
+                <div className="text-2xl lg:text-3xl font-bold  mb-1">500K+</div>
                 <div className="text-sm text-blue-200">Deliveries Managed</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl lg:text-3xl font-bold text-uae-red mb-1">98.5%</div>
+                <div className="text-2xl lg:text-3xl font-bold  mb-1">98.5%</div>
                 <div className="text-sm text-blue-200">Success Rate</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl lg:text-3xl font-bold text-uae-red mb-1">24/7</div>
+                <div className="text-2xl lg:text-3xl font-bold  mb-1">24/7</div>
                 <div className="text-sm text-blue-200">Support</div>
               </div>
             </div>
@@ -141,7 +126,7 @@ export function SolutionHero() {
         <svg viewBox="0 0 1440 120" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path 
             d="M0 120L60 110C120 100 240 80 360 70C480 60 600 60 720 65C840 70 960 80 1080 85C1200 90 1320 90 1380 90L1440 90V120H1380C1320 120 1200 120 1080 120C960 120 840 120 720 120C600 120 480 120 360 120C240 120 120 120 60 120H0Z" 
-            fill="#EFEFEF"
+            fill="#FFFFFF"
           />
         </svg>
       </div>

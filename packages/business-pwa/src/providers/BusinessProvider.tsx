@@ -30,6 +30,7 @@ interface BusinessContextType {
   user: BusinessUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  requiresProfileCompletion: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshToken: () => Promise<void>;
@@ -59,6 +60,7 @@ axios.defaults.withCredentials = true;
 export function BusinessProvider({ children }: BusinessProviderProps) {
   const [user, setUser] = useState<BusinessUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [requiresProfileCompletion, setRequiresProfileCompletion] = useState(false);
   const router = useRouter();
 
   const isAuthenticated = !!user;
@@ -79,19 +81,37 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     const responseInterceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response?.status === 401) {
+        const originalRequest = error.config;
+        
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          
           try {
-            await refreshToken();
-            // Retry the original request
-            const token = Cookies.get('business_token');
-            if (token) {
-              error.config.headers.Authorization = `Bearer ${token}`;
-              return axios.request(error.config);
+            const refreshTokenValue = Cookies.get('business_refresh_token');
+            if (!refreshTokenValue) {
+              throw new Error('No refresh token available');
             }
+
+            const response = await axios.post('/api/auth/refresh', {
+              refreshToken: refreshTokenValue,
+            });
+
+            const { token, refreshToken: newRefreshToken } = response.data;
+
+            // Update stored tokens
+            Cookies.set('business_token', token, { expires: 1 });
+            Cookies.set('business_refresh_token', newRefreshToken, { expires: 7 });
+
+            // Update the authorization header and retry the original request
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return axios.request(originalRequest);
           } catch (refreshError) {
+            console.error('Token refresh failed in interceptor:', refreshError);
             logout();
+            return Promise.reject(refreshError);
           }
         }
+        
         return Promise.reject(error);
       }
     );
@@ -115,8 +135,67 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
         return;
       }
 
-      const response = await axios.get('/api/business/me');
-      setUser(response.data.user);
+      // Test the token by making a request to business dashboard
+      const response = await axios.get('/api/business/dashboard');
+      
+      // Check company profile completion
+      try {
+        const profileResponse = await axios.get('/api/business/profile');
+        const company = profileResponse.data.company;
+        
+        // Check if essential company information is missing
+        const isProfileIncomplete = !company.street_address || 
+                                   !company.area || 
+                                   !company.city || 
+                                   !company.contact_person || 
+                                   !company.phone;
+        
+        setRequiresProfileCompletion(isProfileIncomplete);
+        
+        // If successful, we know the token is valid
+        // Create a basic user object with company data
+        const basicUser: BusinessUser = {
+          id: 'current-user',
+          email: company.email || 'Loading...',
+          firstName: company.contact_person?.split(' ')[0] || 'Business',
+          lastName: company.contact_person?.split(' ').slice(1).join(' ') || 'User',
+          role: 'manager',
+          company: {
+            id: company.id || '',
+            name: company.name || 'Loading...',
+            industry: company.industry || '',
+            address: company.street_address || '',
+            phone: company.phone || '',
+            email: company.email || '',
+          },
+          permissions: ['read', 'write'],
+        };
+        
+        setUser(basicUser);
+      } catch (profileError) {
+        console.error('Failed to load company profile:', profileError);
+        setRequiresProfileCompletion(true);
+        
+        // Create basic user without company data
+        const basicUser: BusinessUser = {
+          id: 'current-user',
+          email: 'Loading...',
+          firstName: 'Business',
+          lastName: 'User',
+          role: 'manager',
+          company: {
+            id: '',
+            name: 'Loading...',
+            industry: '',
+            address: '',
+            phone: '',
+            email: '',
+          },
+          permissions: ['read', 'write'],
+        };
+        
+        setUser(basicUser);
+      }
     } catch (error) {
       console.error('Auth check failed:', error);
       Cookies.remove('business_token');
@@ -128,22 +207,73 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post('/api/business/login', {
+      const response = await axios.post('/api/auth/login', {
         email,
         password,
       });
 
-      const { user: userData, accessToken, refreshToken } = response.data;
+      const { user: userData, token, refreshToken } = response.data;
+
+      // Verify user is a business user
+      if (userData.role !== 'BUSINESS') {
+        toast.error('This account is not authorized for business access');
+        throw new Error('Invalid account type');
+      }
 
       // Store tokens
-      Cookies.set('business_token', accessToken, { expires: 1 }); // 1 day
+      Cookies.set('business_token', token, { expires: 1 }); // 1 day
       Cookies.set('business_refresh_token', refreshToken, { expires: 7 }); // 7 days
 
-      setUser(userData);
-      toast.success(`Welcome back, ${userData.firstName}!`);
+      // Transform user data to match expected structure
+      const businessUser: BusinessUser = {
+        id: userData.id,
+        email: userData.email,
+        firstName: userData.name.split(' ')[0] || userData.name,
+        lastName: userData.name.split(' ').slice(1).join(' ') || '',
+        role: 'manager', // Default role for business users
+        company: {
+          id: userData.companyId || '',
+          name: 'Loading...', // Will be loaded from company details
+          industry: '',
+          address: '',
+          phone: '',
+          email: userData.email,
+        },
+        permissions: ['read', 'write'], // Default permissions
+      };
+
+      setUser(businessUser);
+      toast.success(`Welcome back, ${businessUser.firstName}!`);
       
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Check if profile completion is needed
+      try {
+        const profileResponse = await axios.get('/api/business/profile');
+        const company = profileResponse.data.company;
+        
+        const isProfileIncomplete = !company.street_address || 
+                                   !company.area || 
+                                   !company.city || 
+                                   !company.contact_person || 
+                                   !company.phone;
+        
+        setRequiresProfileCompletion(isProfileIncomplete);
+        
+        if (isProfileIncomplete) {
+          toast('Please complete your company profile to get started', { 
+            icon: 'ℹ️' 
+          });
+          router.push('/profile');
+        } else {
+          router.push('/dashboard');
+        }
+      } catch (profileError) {
+        console.error('Failed to check profile:', profileError);
+        setRequiresProfileCompletion(true);
+        toast('Please complete your company profile to get started', { 
+          icon: 'ℹ️' 
+        });
+        router.push('/profile');
+      }
     } catch (error: any) {
       const message = error.response?.data?.message || 'Login failed';
       toast.error(message);
@@ -166,16 +296,41 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
         throw new Error('No refresh token available');
       }
 
-      const response = await axios.post('/api/business/refresh', {
+      const response = await axios.post('/api/auth/refresh', {
         refreshToken: refreshTokenValue,
       });
 
-      const { accessToken, refreshToken: newRefreshToken } = response.data;
+      const { user: userData, token, refreshToken: newRefreshToken } = response.data;
 
-      Cookies.set('business_token', accessToken, { expires: 1 });
-      Cookies.set('business_refresh_token', newRefreshToken, { expires: 7 });
-    } catch (error) {
+      // Update stored tokens
+      Cookies.set('business_token', token, { expires: 1 }); // 1 day
+      Cookies.set('business_refresh_token', newRefreshToken, { expires: 7 }); // 7 days
+
+      // Update user context if needed
+      if (userData && userData.role === 'BUSINESS') {
+        const businessUser: BusinessUser = {
+          id: userData.id,
+          email: userData.email,
+          firstName: userData.name.split(' ')[0] || userData.name,
+          lastName: userData.name.split(' ').slice(1).join(' ') || '',
+          role: 'manager',
+          company: {
+            id: userData.companyId || '',
+            name: 'Loading...',
+            industry: '',
+            address: '',
+            phone: '',
+            email: userData.email,
+          },
+          permissions: ['read', 'write'],
+        };
+        setUser(businessUser);
+      }
+
+      console.log('Token refreshed successfully');
+    } catch (error: any) {
       console.error('Token refresh failed:', error);
+      // If refresh fails, log out the user
       logout();
       throw error;
     }
@@ -183,9 +338,11 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
 
   const updateProfile = async (data: Partial<BusinessUser>) => {
     try {
-      const response = await axios.patch('/api/business/profile', data);
-      setUser(response.data.user);
-      toast.success('Profile updated successfully');
+      // Profile update not implemented yet
+      toast('Profile update feature coming soon', { 
+        icon: 'ℹ️' 
+      });
+      throw new Error('Profile update not implemented yet');
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update profile';
       toast.error(message);
@@ -197,6 +354,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     user,
     isLoading,
     isAuthenticated,
+    requiresProfileCompletion,
     login,
     logout,
     refreshToken,

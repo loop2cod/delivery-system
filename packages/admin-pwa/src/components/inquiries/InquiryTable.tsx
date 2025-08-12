@@ -13,237 +13,137 @@ import {
   type ColumnFiltersState,
 } from '@tanstack/react-table';
 import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  EyeIcon,
-  PhoneIcon,
-  CheckIcon,
-  XMarkIcon,
-  MagnifyingGlassIcon,
-} from '@heroicons/react/24/outline';
-import { clsx } from 'clsx';
-
-interface Inquiry {
-  id: string;
-  customerName: string;
-  phone: string;
-  email: string;
-  service: string;
-  pickup: string;
-  delivery: string;
-  priority: 'normal' | 'urgent' | 'express';
-  status: 'new' | 'contacted' | 'quoted' | 'assigned' | 'completed' | 'cancelled';
-  createdAt: string;
-  estimatedValue: string;
-  description: string;
-  preferredTime: string;
-}
-
-const mockInquiries: Inquiry[] = [
-  {
-    id: 'INQ-2024-001',
-    customerName: 'Sarah Johnson',
-    phone: '+971-50-123-4567',
-    email: 'sarah.johnson@email.com',
-    service: 'Same-Day Delivery',
-    pickup: 'Dubai Mall, Downtown Dubai',
-    delivery: 'Business Bay Tower, Business Bay',
-    priority: 'urgent',
-    status: 'new',
-    createdAt: '2024-01-15T10:30:00Z',
-    estimatedValue: 'AED 45',
-    description: 'Fragile electronics package, requires careful handling',
-    preferredTime: 'Today before 5 PM',
-  },
-  {
-    id: 'INQ-2024-002',
-    customerName: 'Mohammed Al Rashid',
-    phone: '+971-56-789-0123',
-    email: 'mohammed.rashid@company.ae',
-    service: 'Document Delivery',
-    pickup: 'DIFC Gate District',
-    delivery: 'Abu Dhabi Mall, Abu Dhabi',
-    priority: 'express',
-    status: 'contacted',
-    createdAt: '2024-01-15T09:15:00Z',
-    estimatedValue: 'AED 120',
-    description: 'Legal documents for court filing, urgent delivery required',
-    preferredTime: 'Tomorrow morning',
-  },
-  {
-    id: 'INQ-2024-003',
-    customerName: 'Fatima Hassan',
-    phone: '+971-52-456-7890',
-    email: 'fatima.hassan@gmail.com',
-    service: 'Fragile Items',
-    pickup: 'Sharjah City Centre, Sharjah',
-    delivery: 'Ajman City Centre, Ajman',
-    priority: 'normal',
-    status: 'quoted',
-    createdAt: '2024-01-15T08:45:00Z',
-    estimatedValue: 'AED 85',
-    description: 'Ceramic vase collection, multiple items',
-    preferredTime: 'This weekend',
-  },
-  {
-    id: 'INQ-2024-004',
-    customerName: 'Ahmed Ali',
-    phone: '+971-50-987-6543',
-    email: 'ahmed.ali@business.ae',
-    service: 'Express Delivery',
-    pickup: 'Marina Mall, Dubai Marina',
-    delivery: 'Al Ain Mall, Al Ain',
-    priority: 'express',
-    status: 'assigned',
-    createdAt: '2024-01-15T07:20:00Z',
-    estimatedValue: 'AED 180',
-    description: 'Business presentation materials',
-    preferredTime: 'ASAP',
-  },
-  {
-    id: 'INQ-2024-005',
-    customerName: 'Laila Abdullah',
-    phone: '+971-55-234-5678',
-    email: 'laila.abdullah@home.ae',
-    service: 'Inter-Emirate',
-    pickup: 'MOE, Dubai',
-    delivery: 'RAK Mall, Ras Al Khaimah',
-    priority: 'normal',
-    status: 'completed',
-    createdAt: '2024-01-14T16:30:00Z',
-    estimatedValue: 'AED 200',
-    description: 'Gift packages for family',
-    preferredTime: 'Flexible timing',
-  },
-];
-
-const priorityColors = {
-  normal: 'bg-gray-100 text-gray-800',
-  urgent: 'bg-red-100 text-red-800',
-  express: 'bg-purple-100 text-purple-800',
-};
-
-const statusColors = {
-  new: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-yellow-100 text-yellow-800',
-  quoted: 'bg-indigo-100 text-indigo-800',
-  assigned: 'bg-green-100 text-green-800',
-  completed: 'bg-emerald-100 text-emerald-800',
-  cancelled: 'bg-red-100 text-red-800',
-};
+  ChevronDown,
+  ChevronUp,
+  Eye,
+  Phone,
+  Check,
+  X,
+  Search,
+} from 'lucide-react';
+import { Inquiry, getStatusColor, getStatusLabel, formatDate } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface InquiryTableProps {
+  inquiries: Inquiry[];
+  loading: boolean;
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+  filters: {
+    status: string;
+    search: string;
+  };
   onViewInquiry: (inquiry: Inquiry) => void;
   onContactCustomer: (inquiry: Inquiry) => void;
   onAcceptInquiry: (inquiry: Inquiry) => void;
   onDeclineInquiry: (inquiry: Inquiry) => void;
+  onFilterChange: (key: string, value: string) => void;
+  onPageChange: (page: number) => void;
 }
 
 export function InquiryTable({
+  inquiries,
+  loading,
+  pagination,
+  filters,
   onViewInquiry,
   onContactCustomer,
   onAcceptInquiry,
   onDeclineInquiry,
+  onFilterChange,
+  onPageChange,
 }: InquiryTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState('');
 
   const columns = useMemo<ColumnDef<Inquiry>[]>(
     () => [
       {
-        accessorKey: 'id',
-        header: 'ID',
+        accessorKey: 'reference_number',
+        header: 'Reference',
         cell: ({ row }) => (
           <span className="font-mono text-sm text-gray-600">
-            {row.getValue('id')}
+            {row.getValue('reference_number')}
           </span>
         ),
       },
       {
-        accessorKey: 'customerName',
-        header: 'Customer',
+        accessorKey: 'company_name',
+        header: 'Company',
         cell: ({ row }) => (
           <div>
             <div className="font-medium text-gray-900">
-              {row.getValue('customerName')}
+              {row.getValue('company_name')}
             </div>
             <div className="text-sm text-gray-500">
-              {row.original.phone}
+              {row.original.contact_person}
             </div>
           </div>
         ),
       },
       {
-        accessorKey: 'service',
-        header: 'Service',
+        accessorKey: 'industry',
+        header: 'Industry',
         cell: ({ row }) => (
           <span className="text-sm text-gray-900">
-            {row.getValue('service')}
+            {row.getValue('industry')}
           </span>
         ),
       },
       {
-        accessorKey: 'pickup',
-        header: 'Route',
+        accessorKey: 'expected_volume',
+        header: 'Expected Volume',
         cell: ({ row }) => (
-          <div className="max-w-xs">
-            <div className="text-sm text-gray-900 truncate">
-              From: {row.original.pickup}
-            </div>
-            <div className="text-sm text-gray-500 truncate">
-              To: {row.original.delivery}
-            </div>
-          </div>
-        ),
-      },
-      {
-        accessorKey: 'priority',
-        header: 'Priority',
-        cell: ({ row }) => (
-          <span
-            className={clsx(
-              'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize',
-              priorityColors[row.getValue('priority') as keyof typeof priorityColors]
-            )}
-          >
-            {row.getValue('priority')}
+          <span className="text-sm text-gray-900">
+            {row.getValue('expected_volume')}
           </span>
         ),
       },
       {
         accessorKey: 'status',
         header: 'Status',
-        cell: ({ row }) => (
-          <span
-            className={clsx(
-              'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize',
-              statusColors[row.getValue('status') as keyof typeof statusColors]
-            )}
-          >
-            {row.getValue('status')}
-          </span>
-        ),
+        cell: ({ row }) => {
+          const status = row.getValue('status') as string;
+          return (
+            <Badge variant="secondary" className={getStatusColor(status)}>
+              {getStatusLabel(status)}
+            </Badge>
+          );
+        },
       },
       {
-        accessorKey: 'estimatedValue',
-        header: 'Value',
-        cell: ({ row }) => (
-          <span className="font-medium text-gray-900">
-            {row.getValue('estimatedValue')}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'createdAt',
+        accessorKey: 'created_at',
         header: 'Created',
         cell: ({ row }) => {
-          const date = new Date(row.getValue('createdAt'));
+          const dateStr = row.getValue('created_at') as string;
+          const formatted = formatDate(dateStr);
           return (
             <div className="text-sm text-gray-500">
-              {date.toLocaleDateString()}
+              {formatted.date}
               <br />
-              {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {formatted.time}
             </div>
           );
         },
@@ -253,36 +153,42 @@ export function InquiryTable({
         header: 'Actions',
         cell: ({ row }) => (
           <div className="flex items-center space-x-2">
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onViewInquiry(row.original)}
-              className="p-1 text-gray-400 hover:text-gray-600"
               title="View Details"
             >
-              <EyeIcon className="h-4 w-4" />
-            </button>
-            <button
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => onContactCustomer(row.original)}
-              className="p-1 text-gray-400 hover:text-gray-600"
               title="Contact Customer"
             >
-              <PhoneIcon className="h-4 w-4" />
-            </button>
-            {row.original.status === 'new' && (
+              <Phone className="h-4 w-4" />
+            </Button>
+            {row.original.status === 'NEW' && (
               <>
-                <button
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => onAcceptInquiry(row.original)}
-                  className="p-1 text-green-400 hover:text-green-600"
-                  title="Accept Inquiry"
+                  className="text-green-600 hover:text-green-700"
+                  title="Approve Inquiry"
                 >
-                  <CheckIcon className="h-4 w-4" />
-                </button>
-                <button
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => onDeclineInquiry(row.original)}
-                  className="p-1 text-red-400 hover:text-red-600"
-                  title="Decline Inquiry"
+                  className="text-red-600 hover:text-red-700"
+                  title="Reject Inquiry"
                 >
-                  <XMarkIcon className="h-4 w-4" />
-                </button>
+                  <X className="h-4 w-4" />
+                </Button>
               </>
             )}
           </div>
@@ -293,19 +199,20 @@ export function InquiryTable({
   );
 
   const table = useReactTable({
-    data: mockInquiries,
+    data: inquiries,
     columns,
     onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    manualPagination: true,
+    manualFiltering: true,
+    pageCount: pagination.pages,
     state: {
       sorting,
-      columnFilters,
-      globalFilter,
+      pagination: {
+        pageIndex: pagination.page - 1,
+        pageSize: pagination.limit,
+      },
     },
   });
 
@@ -315,157 +222,148 @@ export function InquiryTable({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div className="relative">
-            <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary sm:text-sm"
+            <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={filters.search}
+              onChange={(e) => onFilterChange('search', e.target.value)}
+              className="pl-10"
               placeholder="Search inquiries..."
             />
           </div>
           
-          <select
-            value={(table.getColumn('status')?.getFilterValue() as string) ?? ''}
-            onChange={(e) =>
-              table.getColumn('status')?.setFilterValue(e.target.value)
-            }
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
-          >
-            <option value="">All Status</option>
-            <option value="new">New</option>
-            <option value="contacted">Contacted</option>
-            <option value="quoted">Quoted</option>
-            <option value="assigned">Assigned</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-
-          <select
-            value={(table.getColumn('priority')?.getFilterValue() as string) ?? ''}
-            onChange={(e) =>
-              table.getColumn('priority')?.setFilterValue(e.target.value)
-            }
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
-          >
-            <option value="">All Priority</option>
-            <option value="normal">Normal</option>
-            <option value="urgent">Urgent</option>
-            <option value="express">Express</option>
-          </select>
+          <Select value={filters.status} onValueChange={(value) => onFilterChange('status', value)}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="NEW">New</SelectItem>
+              <SelectItem value="UNDER_REVIEW">Under Review</SelectItem>
+              <SelectItem value="APPROVED">Approved</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+              <SelectItem value="CONVERTED">Converted</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="text-sm text-gray-500">
-          {table.getFilteredRowModel().rows.length} of{' '}
-          {table.getCoreRowModel().rows.length} inquiries
+        <div className="text-sm text-muted-foreground">
+          {pagination.total} total inquiries
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {header.isPlaceholder ? null : (
-                      <div
-                        className={clsx(
-                          'flex items-center space-x-1',
-                          header.column.getCanSort() && 'cursor-pointer select-none'
-                        )}
-                        onClick={header.column.getToggleSortingHandler()}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="text-left"
                       >
-                        <span>
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                        </span>
-                        {{
-                          asc: <ChevronUpIcon className="h-4 w-4" />,
-                          desc: <ChevronDownIcon className="h-4 w-4" />,
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    )}
-                  </th>
+                        {header.isPlaceholder ? null : (
+                          <div
+                            className={cn(
+                              'flex items-center space-x-1',
+                              header.column.getCanSort() && 'cursor-pointer select-none'
+                            )}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            <span>
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                            </span>
+                            {{
+                              asc: <ChevronUp className="h-4 w-4" />,
+                              desc: <ChevronDown className="h-4 w-4" />,
+                            }[header.column.getIsSorted() as string] ?? null}
+                          </div>
+                        )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="hover:bg-gray-50">
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        className="text-sm"
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            First
-          </button>
-          <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Previous
-          </button>
-          <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
-          <button
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Last
-          </button>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-700">
-            Page {table.getState().pagination.pageIndex + 1} of{' '}
-            {table.getPageCount()}
-          </span>
-          <select
-            value={table.getState().pagination.pageSize}
-            onChange={(e) => {
-              table.setPageSize(Number(e.target.value));
-            }}
-            className="border border-gray-300 rounded px-2 py-1 text-sm"
-          >
-            {[10, 20, 30, 40, 50].map((pageSize) => (
-              <option key={pageSize} value={pageSize}>
-                Show {pageSize}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      {!loading && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(1)}
+                  disabled={pagination.page === 1}
+                >
+                  First
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.pages}
+                >
+                  Next
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(pagination.pages)}
+                  disabled={pagination.page === pagination.pages}
+                >
+                  Last
+                </Button>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-muted-foreground">
+                  Page {pagination.page} of {pagination.pages}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  ({pagination.total} total)
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
