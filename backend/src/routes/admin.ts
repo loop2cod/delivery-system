@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { ObjectId } from 'mongodb';
 import { UserRole } from '../models/User';
 import { requireRoles, authenticateToken } from '../middleware/auth';
 import { db } from '../config/database';
@@ -29,15 +30,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Get recent activity
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentInquiries = await db.findMany('inquiries', 
-      { created_at: { $gte: sevenDaysAgo } }, 
+    const recentInquiries = await db.findMany('inquiries',
+      { created_at: { $gte: sevenDaysAgo } },
       { sort: { created_at: -1 }, limit: 5, projection: { reference_number: 1, company_name: 1, created_at: 1 } }
     );
-    const recentDeliveries = await db.findMany('delivery_requests', 
-      { created_at: { $gte: sevenDaysAgo } }, 
+    const recentDeliveries = await db.findMany('delivery_requests',
+      { created_at: { $gte: sevenDaysAgo } },
       { sort: { created_at: -1 }, limit: 5, projection: { request_number: 1, pickup_area: 1, created_at: 1 } }
     );
-    
+
     const recentActivity = [
       ...recentInquiries.map(item => ({ type: 'inquiry', reference: item.reference_number, title: item.company_name, created_at: item.created_at })),
       ...recentDeliveries.map(item => ({ type: 'delivery', reference: item.request_number, title: `Delivery from ${item.pickup_area}`, created_at: item.created_at }))
@@ -93,18 +94,18 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   }, asyncHandler(async (request, reply) => {
     const { page = 1, limit = 10, status, search } = request.query as any;
-    
+
     // Validate pagination parameters
     const validPage = Math.max(1, parseInt(page) || 1);
     const validLimit = Math.max(1, Math.min(100, parseInt(limit) || 10)); // Max 100 items per page
-    
+
     // Build MongoDB filter
     const filter: any = { status: { $ne: 'CONVERTED' } }; // Exclude converted inquiries
-    
+
     if (status) {
       filter.status = status;
     }
-    
+
     if (search) {
       filter.$or = [
         { company_name: { $regex: search, $options: 'i' } },
@@ -112,15 +113,25 @@ export async function adminRoutes(fastify: FastifyInstance) {
         { email: { $regex: search, $options: 'i' } }
       ];
     }
-    
+
     // Get total count
     const total = await db.count('inquiries', filter);
-    
+
     // Get inquiries with pagination
-    const inquiries = await db.findMany('inquiries', filter, {
+    const rawInquiries = await db.findMany('inquiries', filter, {
       sort: { created_at: -1 },
       skip: (validPage - 1) * validLimit,
       limit: validLimit
+    });
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const inquiries = rawInquiries.map(inquiry => ({
+      ...inquiry,
+      id: inquiry._id.toString(),
+      _id: undefined
+    })).map(inquiry => {
+      delete inquiry._id;
+      return inquiry;
     });
 
     return {
@@ -160,7 +171,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const adminId = request.user!.id;
 
     // Get the current inquiry details
-    const currentInquiry = await db.findOne('inquiries', { _id: id });
+    const currentInquiry = await db.findOne('inquiries', { _id: new ObjectId(id) });
 
     if (!currentInquiry) {
       reply.code(404);
@@ -176,7 +187,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         // Generate a unique trade license number
         const tradeLicensePrefix = currentInquiry.industry.substring(0, 2).toUpperCase();
         const licenseNumber = `${tradeLicensePrefix}-${Date.now().toString().slice(-7)}`;
-        
+
         // Create company from inquiry data
         const newCompany = await db.insertOne('companies', {
           name: currentInquiry.company_name,
@@ -198,12 +209,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
         const existingUser = await db.findOne('users', { email: currentInquiry.email });
 
         let businessUserId;
-        
+
         if (!existingUser) {
           // Generate a temporary password for the business user
           const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
           const hashedPassword = await bcrypt.hash(tempPassword, 10);
-          
+
           // Create business user account
           const businessUser = await db.insertOne('users', {
             email: currentInquiry.email,
@@ -214,9 +225,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
             status: 'ACTIVE',
             email_verified: true
           });
-          
+
           businessUserId = businessUser._id;
-          
+
           // TODO: Send email with login credentials
           console.log(`Created business user for ${currentInquiry.email} with temporary password: ${tempPassword}`);
         } else {
@@ -241,8 +252,21 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const updateData: any = {};
     if (updates.status) updateData.status = updates.status;
     if (updates.notes) updateData.special_requirements = updates.notes;
-    
-    const updatedInquiry = await db.updateOne('inquiries', { _id: id }, { $set: updateData });
+
+    const rawUpdatedInquiry = await db.updateOne('inquiries', { _id: new ObjectId(id) }, { $set: updateData });
+
+    if (!rawUpdatedInquiry) {
+      reply.code(404);
+      return { error: 'Inquiry not found' };
+    }
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const updatedInquiry = {
+      ...rawUpdatedInquiry,
+      id: rawUpdatedInquiry._id.toString(),
+      _id: undefined
+    };
+    delete updatedInquiry._id;
 
     return updatedInquiry;
   }));
@@ -300,7 +324,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   }, asyncHandler(async (request, reply) => {
     const { page = 1, limit = 10, status, search } = request.query as any;
-    
+
     // Validate pagination parameters
     const validPage = Math.max(1, parseInt(page) || 1);
     const validLimit = Math.max(1, Math.min(100, parseInt(limit) || 10)); // Max 100 items per page
@@ -322,23 +346,44 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params.push(`%${search}%`);
     }
 
-    // Get total count
-    const countResult = await db.queryOne(`SELECT COUNT(*) as count FROM companies c ${whereClause}`, params);
-    const total = parseInt(countResult.count);
+    // Build MongoDB filter
+    const filter: any = {};
 
-    // Get companies
-    const companiesResult = await db.query(`
-      SELECT c.*, COUNT(dr.id) as total_requests
-      FROM companies c
-      LEFT JOIN delivery_requests dr ON c.id = dr.company_id
-      ${whereClause}
-      GROUP BY c.id
-      ORDER BY c.created_at DESC
-      LIMIT ${validLimit} OFFSET ${offset}
-    `, params);
+    if (status) {
+      filter.status = status;
+    }
+
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { contact_person: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get total count
+    const total = await db.count('companies', filter);
+
+    // Get companies with pagination
+    const rawCompanies = await db.findMany('companies', filter, {
+      sort: { created_at: -1 },
+      skip: (validPage - 1) * validLimit,
+      limit: validLimit
+    });
+
+    // Convert MongoDB _id to id for frontend compatibility and add total_requests placeholder
+    const companies = rawCompanies.map(company => ({
+      ...company,
+      id: company._id.toString(),
+      total_requests: 0, // TODO: Calculate actual delivery requests count
+      _id: undefined
+    })).map(company => {
+      delete company._id;
+      return company;
+    });
 
     return {
-      companies: companiesResult.rows,
+      companies,
       pagination: {
         page: validPage,
         limit: validLimit,
@@ -357,7 +402,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string' }
         },
         required: ['id']
       }
@@ -365,19 +410,22 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    const companyResult = await db.queryOne(`
-      SELECT c.*, COUNT(dr.id) as total_requests
-      FROM companies c
-      LEFT JOIN delivery_requests dr ON c.id = dr.company_id
-      WHERE c.id = $1
-      GROUP BY c.id
-    `, [id]);
+    const company = await db.findOne('companies', { _id: new ObjectId(id) });
 
-    if (!companyResult) {
+    if (!company) {
       return reply.code(404).send({ error: 'Company not found' });
     }
 
-    return companyResult;
+    // Convert MongoDB _id to id for frontend compatibility and add total_requests placeholder
+    const result = {
+      ...company,
+      id: company._id.toString(),
+      total_requests: 0, // TODO: Calculate actual delivery requests count
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Reset password for company user
@@ -389,7 +437,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string' }
         },
         required: ['id']
       },
@@ -406,17 +454,37 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
 
-    // Find the primary company user
-    const companyUser = await db.queryOne(`
-      SELECT u.id, u.email, u.name, c.name as company_name
-      FROM users u
-      JOIN company_users cu ON u.id = cu.user_id
-      JOIN companies c ON cu.company_id = c.id
-      WHERE c.id = $1 AND cu.is_primary = true AND u.role = 'BUSINESS'
-    `, [id]);
+    // Find the company first
+    const company = await db.findOne('companies', { _id: new ObjectId(id) });
 
-    if (!companyUser) {
-      return reply.code(404).send({ 
+    if (!company) {
+      return reply.code(404).send({
+        error: 'Company not found',
+        message: 'Company not found'
+      });
+    }
+
+    // Find the company_user relationship for this company where is_primary = true
+    const companyUserRelation = await db.findOne('company_users', {
+      company_id: new ObjectId(id),
+      is_primary: true
+    });
+
+    if (!companyUserRelation) {
+      return reply.code(404).send({
+        error: 'Company user not found',
+        message: 'No primary business user found for this company'
+      });
+    }
+
+    // Find the actual user
+    const user = await db.findOne('users', {
+      _id: companyUserRelation.user_id,
+      role: 'BUSINESS'
+    });
+
+    if (!user) {
+      return reply.code(404).send({
         error: 'Company user not found',
         message: 'No primary business user found for this company'
       });
@@ -427,23 +495,22 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     // Update user password
-    await db.query(`
-      UPDATE users 
-      SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `, [hashedPassword, companyUser.id]);
+    await db.updateOne('users',
+      { _id: user._id },
+      { $set: { password_hash: hashedPassword, updated_at: new Date() } }
+    );
 
     // Log the action (in production, this should be logged properly and the password should be sent via email)
-    console.log(`Password reset for ${companyUser.email} (${companyUser.company_name}). New password: ${newPassword}`);
+    console.log(`Password reset for ${user.email} (${company.name}). New password: ${newPassword}`);
 
     return {
-      message: `Password reset successfully for ${companyUser.name} (${companyUser.email})`,
+      message: `Password reset successfully for ${user.name} (${user.email})`,
       newPassword: newPassword
     };
   }));
 
   // Driver management routes
-  
+
   // Get all drivers
   fastify.get('/drivers', {
     schema: {
@@ -463,7 +530,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   }, asyncHandler(async (request, reply) => {
     const { page = 1, limit = 10, status, availability, search } = request.query as any;
-    
+
     // Validate pagination parameters
     const validPage = Math.max(1, parseInt(page) || 1);
     const validLimit = Math.max(1, Math.min(100, parseInt(limit) || 10));
@@ -528,7 +595,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string' }
         },
         required: ['id']
       }
@@ -611,7 +678,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string' }
         },
         required: ['id']
       },
@@ -650,7 +717,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       params: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' }
+          id: { type: 'string' }
         },
         required: ['id']
       },
@@ -727,7 +794,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     const referenceNumber = `INQ-${currentYear}-${sequenceNumber}`;
 
     // Create inquiry
-    const newInquiry = await db.insertOne('inquiries', {
+    const rawInquiry = await db.insertOne('inquiries', {
       reference_number: referenceNumber,
       company_name: inquiryData.company_name,
       industry: inquiryData.industry,
@@ -739,6 +806,14 @@ export async function adminRoutes(fastify: FastifyInstance) {
       special_requirements: inquiryData.special_requirements,
       status: 'NEW'
     });
+
+    // Convert MongoDB _id to id for frontend compatibility
+    const newInquiry = {
+      ...rawInquiry,
+      id: rawInquiry._id.toString(),
+      _id: undefined
+    };
+    delete newInquiry._id;
 
     reply.code(201);
     return newInquiry;
@@ -779,18 +854,23 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as any;
 
-    const inquiry = await db.queryOne(`
-      SELECT i.*
-      FROM inquiries i
-      WHERE i.id = $1
-    `, [id]);
+    // Use MongoDB ObjectId for the query
+    const inquiry = await db.findOne('inquiries', { _id: new ObjectId(id) });
 
     if (!inquiry) {
       reply.code(404);
       return { error: 'Inquiry not found' };
     }
 
-    return inquiry;
+    // Convert MongoDB _id to id for frontend compatibility
+    const result = {
+      ...inquiry,
+      id: inquiry._id.toString(),
+      _id: undefined
+    };
+    delete result._id;
+
+    return result;
   }));
 
   // Delete inquiry
@@ -817,9 +897,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as any;
 
-    const result = await db.query('DELETE FROM inquiries WHERE id = $1', [id]);
+    const deleted = await db.deleteOne('inquiries', { _id: new ObjectId(id) });
 
-    if (result.rowCount === 0) {
+    if (!deleted) {
       reply.code(404);
       return { error: 'Inquiry not found' };
     }
@@ -909,7 +989,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
           // Generate a unique trade license number
           const tradeLicensePrefix = inquiry.industry.substring(0, 2).toUpperCase();
           const licenseNumber = `${tradeLicensePrefix}-${Date.now().toString().slice(-7)}`;
-          
+
           // Create company from inquiry data
           const newCompany = await db.queryOne(`
             INSERT INTO companies (
@@ -940,12 +1020,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
           `, [inquiry.email]);
 
           let businessUserId;
-          
+
           if (!existingUser) {
             // Generate a temporary password for the business user
             const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
             const hashedPassword = await bcrypt.hash(tempPassword, 10);
-            
+
             // Create business user account
             const businessUser = await db.queryOne(`
               INSERT INTO users (
@@ -962,9 +1042,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
               'ACTIVE',
               true
             ]);
-            
+
             businessUserId = businessUser.id;
-            
+
             // TODO: Send email with login credentials
             console.log(`Created business user for ${inquiry.email} with temporary password: ${tempPassword}`);
           } else {
