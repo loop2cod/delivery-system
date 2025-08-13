@@ -5,6 +5,7 @@ import { requireRoles, authenticateToken } from '../middleware/auth';
 import { db } from '../config/database';
 import { asyncHandler } from '../middleware/errorHandler';
 import bcrypt from 'bcryptjs';
+import { DeliveryPricing } from '../models/DeliveryPricing';
 
 // Helper function to format dates for frontend compatibility
 function formatDatesForFrontend(obj: any): any {
@@ -1075,56 +1076,6 @@ export async function adminRoutes(fastify: FastifyInstance) {
     return { message: 'Inquiry deleted successfully' };
   }));
 
-  // Get all admin staff for assignment
-  fastify.get('/staff', {
-    schema: {
-      description: 'Get all admin staff for assignment',
-      tags: ['Admin'],
-      security: [{ bearerAuth: [] }],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            staff: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  name: { type: 'string' },
-                  email: { type: 'string' },
-                  role: { type: 'string' }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, asyncHandler(async (request, reply) => {
-    const rawStaff = await db.findMany('users', 
-      { 
-        role: { $in: ['ADMIN', 'SUPER_ADMIN'] }, 
-        status: 'ACTIVE' 
-      },
-      { 
-        sort: { name: 1 },
-        projection: { name: 1, email: 1, role: 1 }
-      }
-    );
-
-    // Convert MongoDB _id to id for frontend compatibility
-    const staff = rawStaff.map(member => ({
-      ...member,
-      id: member._id.toString(),
-      _id: undefined
-    })).map(member => {
-      delete member._id;
-      return member;
-    });
-
-    return { staff };
-  }));
 
   // Bulk update inquiry status
   fastify.post('/inquiries/bulk-update', {
@@ -1289,24 +1240,36 @@ export async function adminRoutes(fastify: FastifyInstance) {
     };
   }));
 
-  // Staff Management Endpoints
-  
   // Get all staff members
-  fastify.get('/staff', asyncHandler(async (request, reply) => {
-    const { page = 1, limit = 20, search = '', role = '' } = request.query as any;
+  fastify.get('/staff', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'string', default: '1' },
+          limit: { type: 'string', default: '10' },
+          search: { type: 'string' },
+          role: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { page = '1', limit = '10', search, role } = request.query as any;
     
-    const skip = (page - 1) * limit;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Build filter
     const filter: any = {
       role: { $in: ['STAFF', 'ADMIN', 'SUPER_ADMIN'] }
     };
-
+    
     if (search) {
       filter.$or = [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } }
       ];
     }
-
+    
     if (role) {
       filter.role = role;
     }
@@ -1563,6 +1526,276 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     return {
       message: 'Password reset successfully'
+    };
+  }));
+
+  // Delivery Pricing Management Endpoints
+
+  // Get all pricing configurations
+  fastify.get('/pricing', asyncHandler(async (request, reply) => {
+    const { type = 'all' } = request.query as any;
+    
+    let filter: any = {};
+    
+    if (type === 'default') {
+      filter = { isDefault: true, companyId: { $exists: false } };
+    } else if (type === 'company') {
+      filter = { companyId: { $exists: true } };
+    }
+
+    const pricingConfigs = await DeliveryPricing.find(filter)
+      .sort({ isDefault: -1, createdAt: -1 });
+
+    return {
+      pricing: pricingConfigs
+    };
+  }));
+
+  // Get default pricing
+  fastify.get('/pricing/default', asyncHandler(async (request, reply) => {
+    const defaultPricing = await DeliveryPricing.findOne({ 
+      isDefault: true, 
+      companyId: { $exists: false } 
+    });
+
+    if (!defaultPricing) {
+      return reply.code(404).send({ error: 'Default pricing not found' });
+    }
+
+    return {
+      pricing: defaultPricing
+    };
+  }));
+
+  // Create or update default pricing
+  fastify.post('/pricing/default', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'tiers'],
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          tiers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['minWeight', 'type', 'price'],
+              properties: {
+                minWeight: { type: 'number', minimum: 0 },
+                maxWeight: { type: 'number', minimum: 0 },
+                type: { type: 'string', enum: ['fixed', 'per_kg'] },
+                price: { type: 'number', minimum: 0 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { name, description, tiers } = request.body as any;
+
+    // Validate tiers
+    if (!tiers || tiers.length === 0) {
+      return reply.code(400).send({ error: 'At least one pricing tier is required' });
+    }
+
+    // Sort tiers by minWeight and validate
+    const sortedTiers = [...tiers].sort((a, b) => a.minWeight - b.minWeight);
+    
+    // Validate tier structure
+    for (let i = 0; i < sortedTiers.length; i++) {
+      const current = sortedTiers[i];
+      const next = sortedTiers[i + 1];
+      
+      if (current.maxWeight && current.maxWeight <= current.minWeight) {
+        return reply.code(400).send({ 
+          error: `Invalid tier: maxWeight must be greater than minWeight for tier ${i + 1}` 
+        });
+      }
+      
+      if (next && current.maxWeight && current.maxWeight < next.minWeight) {
+        return reply.code(400).send({ 
+          error: `Gap detected between tier ${i + 1} and tier ${i + 2}` 
+        });
+      }
+    }
+
+    try {
+      // Remove existing default pricing
+      await DeliveryPricing.deleteMany({ 
+        isDefault: true, 
+        companyId: { $exists: false } 
+      });
+
+      // Create new default pricing
+      const pricingData = {
+        name,
+        description,
+        tiers: sortedTiers,
+        isActive: true,
+        isDefault: true
+      };
+
+      const newPricing = new DeliveryPricing(pricingData);
+      await newPricing.save();
+
+      return {
+        message: 'Default pricing updated successfully',
+        pricing: newPricing
+      };
+    } catch (error: any) {
+      return reply.code(500).send({ 
+        error: 'Failed to update pricing',
+        details: error.message 
+      });
+    }
+  }));
+
+  // Get pricing for a specific company
+  fastify.get('/pricing/company/:companyId', asyncHandler(async (request, reply) => {
+    const { companyId } = request.params as any;
+
+    if (!ObjectId.isValid(companyId)) {
+      return reply.code(400).send({ error: 'Invalid company ID' });
+    }
+
+    const pricing = await DeliveryPricing.getPricingForCompany(companyId);
+
+    if (!pricing) {
+      return reply.code(404).send({ error: 'No pricing found for this company' });
+    }
+
+    return {
+      pricing,
+      isCustom: !!pricing.companyId
+    };
+  }));
+
+  // Set custom pricing for a company
+  fastify.post('/pricing/company/:companyId', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['name', 'tiers'],
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          tiers: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['minWeight', 'type', 'price'],
+              properties: {
+                minWeight: { type: 'number', minimum: 0 },
+                maxWeight: { type: 'number', minimum: 0 },
+                type: { type: 'string', enum: ['fixed', 'per_kg'] },
+                price: { type: 'number', minimum: 0 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { companyId } = request.params as any;
+    const { name, description, tiers } = request.body as any;
+
+    if (!ObjectId.isValid(companyId)) {
+      return reply.code(400).send({ error: 'Invalid company ID' });
+    }
+
+    // Check if company exists
+    const company = await db.findOne('companies', { _id: new ObjectId(companyId) });
+    if (!company) {
+      return reply.code(404).send({ error: 'Company not found' });
+    }
+
+    // Validate tiers (same validation as default pricing)
+    if (!tiers || tiers.length === 0) {
+      return reply.code(400).send({ error: 'At least one pricing tier is required' });
+    }
+
+    const sortedTiers = [...tiers].sort((a, b) => a.minWeight - b.minWeight);
+
+    try {
+      // Remove existing company-specific pricing
+      await DeliveryPricing.deleteMany({ companyId });
+
+      // Create new company-specific pricing
+      const pricingData = {
+        name,
+        description,
+        tiers: sortedTiers,
+        isActive: true,
+        isDefault: false,
+        companyId
+      };
+
+      const newPricing = new DeliveryPricing(pricingData);
+      await newPricing.save();
+
+      return {
+        message: 'Company pricing updated successfully',
+        pricing: newPricing
+      };
+    } catch (error: any) {
+      return reply.code(500).send({ 
+        error: 'Failed to update company pricing',
+        details: error.message 
+      });
+    }
+  }));
+
+  // Remove custom pricing for a company (revert to default)
+  fastify.delete('/pricing/company/:companyId', asyncHandler(async (request, reply) => {
+    const { companyId } = request.params as any;
+
+    if (!ObjectId.isValid(companyId)) {
+      return reply.code(400).send({ error: 'Invalid company ID' });
+    }
+
+    const deleted = await DeliveryPricing.deleteMany({ companyId });
+
+    return {
+      message: 'Company-specific pricing removed successfully',
+      deletedCount: deleted.deletedCount
+    };
+  }));
+
+  // Calculate price for a given weight and company
+  fastify.post('/pricing/calculate', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['weight'],
+        properties: {
+          weight: { type: 'number', minimum: 0.1 },
+          companyId: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { weight, companyId } = request.body as any;
+
+    if (companyId && !ObjectId.isValid(companyId)) {
+      return reply.code(400).send({ error: 'Invalid company ID' });
+    }
+
+    const pricing = await DeliveryPricing.getPricingForCompany(companyId);
+
+    if (!pricing) {
+      return reply.code(404).send({ error: 'No pricing configuration found' });
+    }
+
+    const calculatedPrice = pricing.calculatePrice(weight);
+
+    return {
+      weight,
+      price: calculatedPrice,
+      currency: 'AED',
+      pricingName: pricing.name,
+      isCustomPricing: !!pricing.companyId
     };
   }));
 }

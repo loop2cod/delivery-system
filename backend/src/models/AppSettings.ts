@@ -56,8 +56,7 @@ const AppSettingsSchema = new Schema<IAppSettings>({
   toObject: { virtuals: true }
 });
 
-// Indexes
-AppSettingsSchema.index({ key: 1 });
+// Indexes (key index is already created by unique: true)
 AppSettingsSchema.index({ is_public: 1 });
 
 // Virtual for id

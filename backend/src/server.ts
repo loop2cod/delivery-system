@@ -260,8 +260,15 @@ class DeliveryServer {
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-      process.exit(1);
+      logger.error('Unhandled Rejection at:', {
+        promise: promise,
+        reason: reason,
+        stack: reason instanceof Error ? reason.stack : 'No stack trace available'
+      });
+      // Don't exit immediately in development to help with debugging
+      if (config.NODE_ENV === 'production') {
+        process.exit(1);
+      }
     });
   }
 

@@ -111,9 +111,7 @@ const DriverSchema = new Schema<IDriver>({
   toObject: { virtuals: true }
 });
 
-// Indexes
-DriverSchema.index({ user_id: 1 });
-DriverSchema.index({ license_number: 1 });
+// Indexes (user_id and license_number indexes are already created by unique: true)
 DriverSchema.index({ status: 1 });
 DriverSchema.index({ is_verified: 1 });
 

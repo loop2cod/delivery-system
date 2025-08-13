@@ -1,6 +1,142 @@
+import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 import Cookies from 'js-cookie';
+import toast from 'react-hot-toast';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+// Create axios instance with base configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Debug log to verify configuration (development only)
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔧 API Configuration:', {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    API_BASE_URL,
+    timestamp: new Date().toISOString()
+  });
+}
+
+export const api: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 30000, // 30 seconds timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    // Get token from localStorage or cookies
+    let token = null;
+    if (typeof window !== 'undefined') {
+      token = localStorage.getItem('token') || Cookies.get('admin_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    
+    // Log request for debugging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+        baseURL: config.baseURL,
+        fullURL: `${config.baseURL}${config.url}`,
+        data: config.data,
+        hasToken: !!token,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return config;
+  },
+  (error) => {
+    console.error('❌ Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling and logging
+api.interceptors.response.use(
+  (response: AxiosResponse) => {
+    // Log successful responses in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ API Response: ${response.config.method?.toUpperCase()} ${response.config.url}`, {
+        status: response.status,
+        data: response.data,
+      });
+    }
+    
+    return response;
+  },
+  (error: AxiosError) => {
+    const { response, request, config } = error;
+    
+    // Log error details
+    console.error(`❌ API Error: ${config?.method?.toUpperCase()} ${config?.url}`, {
+      status: response?.status,
+      data: response?.data,
+      message: error.message,
+    });
+
+    // Handle different error scenarios
+    if (response) {
+      // Server responded with error status
+      const status = response.status;
+      const errorData = response.data as any;
+      
+      switch (status) {
+        case 401:
+          // Unauthorized - redirect to login
+          toast.error('Session expired. Please log in again.');
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            Cookies.remove('admin_token');
+            window.location.href = '/login';
+          }
+          break;
+          
+        case 403:
+          // Forbidden
+          toast.error(errorData?.message || 'Access denied. Insufficient permissions.');
+          break;
+          
+        case 404:
+          // Not found - don't show toast for 404s as they might be expected
+          break;
+          
+        case 422:
+          // Validation error
+          toast.error(errorData?.message || 'Invalid data provided.');
+          break;
+          
+        case 429:
+          // Rate limit
+          toast.error('Too many requests. Please try again later.');
+          break;
+          
+        case 500:
+        case 502:
+        case 503:
+        case 504:
+          // Server errors
+          toast.error('Server error. Please try again later.');
+          break;
+          
+        default:
+          if (status >= 400) {
+            toast.error(errorData?.message || `Error: ${status}`);
+          }
+      }
+    } else if (request) {
+      // Request made but no response received (network error)
+      toast.error('Network error. Please check your connection.');
+    } else {
+      // Something else happened
+      toast.error('An unexpected error occurred.');
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 // Types matching our backend API
 export interface Inquiry {
@@ -127,67 +263,43 @@ export interface DashboardStats {
   }>;
 }
 
-// API client class
+// Pricing-related interfaces
+export interface PricingTier {
+  minWeight: number;
+  maxWeight?: number;
+  type: 'fixed' | 'per_kg';
+  price: number;
+}
+
+export interface DeliveryPricing {
+  _id?: string;
+  name: string;
+  description?: string;
+  tiers: PricingTier[];
+  isActive: boolean;
+  isDefault: boolean;
+  companyId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// API client class using axios
 class AdminAPI {
-  private baseURL: string;
-
-  constructor(baseURL: string) {
-    this.baseURL = baseURL;
-  }
-
-  private getToken(): string | null {
-    return Cookies.get('admin_token') || null;
-  }
-
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    const headers: any = {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    };
-
-    const token = this.getToken();
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
-    const response = await fetch(url, {
-      ...options, 
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        message: 'An error occurred',
-      }));
-      throw new Error(error.message || 'API request failed');
-    }
-
-    return response.json();
-  }
-
   // Auth endpoints
   async login(email: string, password: string, pwaType: string = 'admin') {
-    const response = await this.request<{
+    const response = await api.post<{
       user: any;
       token: string;
       refreshToken: string;
       expiresIn: string;
-    }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, pwaType }),
-    });
+    }>('/api/auth/login', { email, password, pwaType });
     
-    return response;
+    return response.data;
   }
 
   async logout() {
     try {
-      await this.request('/auth/logout', { method: 'POST' });
+      await api.post('/api/auth/logout');
     } finally {
       // Token cleanup handled by AdminProvider
     }
@@ -195,7 +307,8 @@ class AdminAPI {
 
   // Dashboard endpoints
   async getDashboard(): Promise<DashboardStats> {
-    return this.request<DashboardStats>('/api/admin/dashboard');
+    const response = await api.get<DashboardStats>('/api/admin/dashboard');
+    return response.data;
   }
 
   // Inquiry endpoints
@@ -213,15 +326,7 @@ class AdminAPI {
       pages: number;
     };
   }> {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.append(key, String(value));
-      }
-    });
-
-    const queryString = searchParams.toString();
-    return this.request<{
+    const response = await api.get<{
       inquiries: Inquiry[];
       pagination: {
         page: number;
@@ -229,18 +334,19 @@ class AdminAPI {
         total: number;
         pages: number;
       };
-    }>(`/api/admin/inquiries${queryString ? `?${queryString}` : ''}`);
+    }>('/api/admin/inquiries', { params });
+    
+    return response.data;
   }
 
   async getInquiry(id: string): Promise<Inquiry> {
-    return this.request<Inquiry>(`/api/admin/inquiries/${id}`);
+    const response = await api.get<Inquiry>(`/api/admin/inquiries/${id}`);
+    return response.data;
   }
 
   async createInquiry(data: CreateInquiryData): Promise<Inquiry> {
-    return this.request<Inquiry>('/api/admin/inquiries', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const response = await api.post<Inquiry>('/api/admin/inquiries', data);
+    return response.data;
   }
 
   async updateInquiry(
@@ -250,16 +356,13 @@ class AdminAPI {
       notes: string;
     }>
   ): Promise<Inquiry> {
-    return this.request<Inquiry>(`/api/admin/inquiries/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    const response = await api.put<Inquiry>(`/api/admin/inquiries/${id}`, data);
+    return response.data;
   }
 
   async deleteInquiry(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/api/admin/inquiries/${id}`, {
-      method: 'DELETE',
-    });
+    const response = await api.delete<{ message: string }>(`/api/admin/inquiries/${id}`);
+    return response.data;
   }
 
   async bulkUpdateInquiries(data: {
@@ -274,17 +377,15 @@ class AdminAPI {
       status: string;
     }>;
   }> {
-    return this.request<{
+    const response = await api.post<{
       message: string;
       updated_inquiries: Array<{
         id: string;
         reference_number: string;
         status: string;
       }>;
-    }>('/api/admin/inquiries/bulk-update', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    }>('/api/admin/inquiries/bulk-update', data);
+    return response.data;
   }
 
   // Company endpoints
@@ -302,15 +403,7 @@ class AdminAPI {
       pages: number;
     };
   }> {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.append(key, String(value));
-      }
-    });
-
-    const queryString = searchParams.toString();
-    return this.request<{
+    const response = await api.get<{
       companies: Company[];
       pagination: {
         page: number;
@@ -318,34 +411,20 @@ class AdminAPI {
         total: number;
         pages: number;
       };
-    }>(`/api/admin/companies${queryString ? `?${queryString}` : ''}`);
+    }>('/api/admin/companies', { params });
+    return response.data;
   }
 
   async getCompany(id: string): Promise<Company> {
-    return this.request<Company>(`/api/admin/companies/${id}`);
+    const response = await api.get<Company>(`/api/admin/companies/${id}`);
+    return response.data;
   }
 
   async resetCompanyPassword(id: string): Promise<{ message: string; newPassword: string }> {
-    const token = this.getToken();
-    const headers: any = {};
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Make direct fetch call to avoid automatic Content-Type header
-    const response = await fetch(`${this.baseURL}/api/admin/companies/${id}/reset-password`, {
-      method: 'POST',
-      headers,
-    });
-    
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({
-        message: 'An error occurred',
-      }));
-      throw new Error(error.message || 'API request failed');
-    }
-    
-    return response.json();
+    const response = await api.post<{ message: string; newPassword: string }>(
+      `/api/admin/companies/${id}/reset-password`
+    );
+    return response.data;
   }
 
   // Driver endpoints
@@ -364,15 +443,7 @@ class AdminAPI {
       pages: number;
     };
   }> {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        searchParams.append(key, String(value));
-      }
-    });
-
-    const queryString = searchParams.toString();
-    return this.request<{
+    const response = await api.get<{
       drivers: Driver[];
       pagination: {
         page: number;
@@ -380,64 +451,175 @@ class AdminAPI {
         total: number;
         pages: number;
       };
-    }>(`/api/admin/drivers${queryString ? `?${queryString}` : ''}`);
+    }>('/api/admin/drivers', { params });
+    return response.data;
   }
 
   async getDriver(id: string): Promise<Driver> {
-    return this.request<Driver>(`/api/admin/drivers/${id}`);
+    const response = await api.get<Driver>(`/api/admin/drivers/${id}`);
+    return response.data;
   }
 
   async createDriver(data: CreateDriverData): Promise<Driver> {
-    return this.request<Driver>('/api/admin/drivers', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const response = await api.post<Driver>('/api/admin/drivers', data);
+    return response.data;
   }
 
   async updateDriver(
     id: string,
     data: Partial<Driver>
   ): Promise<Driver> {
-    return this.request<Driver>(`/api/admin/drivers/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    const response = await api.put<Driver>(`/api/admin/drivers/${id}`, data);
+    return response.data;
   }
 
   async deleteDriver(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(`/api/admin/drivers/${id}`, {
-      method: 'DELETE',
-    });
+    const response = await api.delete<{ message: string }>(`/api/admin/drivers/${id}`);
+    return response.data;
   }
 
   async updateDriverStatus(
     id: string,
     status: Driver['status']
   ): Promise<Driver> {
-    return this.request<Driver>(`/api/admin/drivers/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    });
+    const response = await api.put<Driver>(`/api/admin/drivers/${id}/status`, { status });
+    return response.data;
   }
 
   async updateDriverAvailability(
     id: string,
     availability_status: Driver['availability_status']
   ): Promise<Driver> {
-    return this.request<Driver>(`/api/admin/drivers/${id}/availability`, {
-      method: 'PUT',
-      body: JSON.stringify({ availability_status }),
-    });
+    const response = await api.put<Driver>(`/api/admin/drivers/${id}/availability`, { availability_status });
+    return response.data;
   }
 
   // Staff endpoints
-  async getStaff(): Promise<{ staff: Staff[] }> {
-    return this.request<{ staff: Staff[] }>('/api/admin/staff');
+  async getStaff(params: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    role?: string;
+  } = {}): Promise<{
+    staff: Staff[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }> {
+    const response = await api.get<{
+      staff: Staff[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>('/api/admin/staff', { params });
+    return response.data;
+  }
+
+  async getStaffMember(id: string): Promise<{ staff: Staff }> {
+    const response = await api.get<{ staff: Staff }>(`/api/admin/staff/${id}`);
+    return response.data;
+  }
+
+  async createStaff(staffData: any): Promise<{ message: string; staff: Staff }> {
+    const response = await api.post<{ message: string; staff: Staff }>('/api/admin/staff', staffData);
+    return response.data;
+  }
+
+  async updateStaff(id: string, staffData: any): Promise<{ message: string; staff: Staff }> {
+    const response = await api.put<{ message: string; staff: Staff }>(`/api/admin/staff/${id}`, staffData);
+    return response.data;
+  }
+
+  async deleteStaff(id: string): Promise<{ message: string }> {
+    const response = await api.delete<{ message: string }>(`/api/admin/staff/${id}`);
+    return response.data;
+  }
+
+  async resetStaffPassword(id: string, newPassword: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/api/admin/staff/${id}/reset-password`, { newPassword });
+    return response.data;
+  }
+
+  // Pricing Management endpoints
+  async getPricing(type?: 'all' | 'default' | 'company'): Promise<{ pricing: DeliveryPricing[] }> {
+    const response = await api.get<{ pricing: DeliveryPricing[] }>('/api/admin/pricing', { 
+      params: type ? { type } : {} 
+    });
+    return response.data;
+  }
+
+  async getDefaultPricing(): Promise<{ pricing: DeliveryPricing }> {
+    const response = await api.get<{ pricing: DeliveryPricing }>('/api/admin/pricing/default');
+    return response.data;
+  }
+
+  async createOrUpdateDefaultPricing(pricingData: {
+    name: string;
+    description?: string;
+    tiers: PricingTier[];
+  }): Promise<{ message: string; pricing: DeliveryPricing }> {
+    const response = await api.post<{ message: string; pricing: DeliveryPricing }>(
+      '/api/admin/pricing/default',
+      pricingData
+    );
+    return response.data;
+  }
+
+  async getCompanyPricing(companyId: string): Promise<{ pricing: DeliveryPricing; isCustom: boolean }> {
+    const response = await api.get<{ pricing: DeliveryPricing; isCustom: boolean }>(
+      `/api/admin/pricing/company/${companyId}`
+    );
+    return response.data;
+  }
+
+  async setCompanyPricing(companyId: string, pricingData: {
+    name: string;
+    description?: string;
+    tiers: PricingTier[];
+  }): Promise<{ message: string; pricing: DeliveryPricing }> {
+    const response = await api.post<{ message: string; pricing: DeliveryPricing }>(
+      `/api/admin/pricing/company/${companyId}`,
+      pricingData
+    );
+    return response.data;
+  }
+
+  async removeCompanyPricing(companyId: string): Promise<{ message: string; deletedCount: number }> {
+    const response = await api.delete<{ message: string; deletedCount: number }>(
+      `/api/admin/pricing/company/${companyId}`
+    );
+    return response.data;
+  }
+
+  async calculatePrice(data: { 
+    weight: number; 
+    companyId?: string 
+  }): Promise<{
+    weight: number;
+    price: number;
+    currency: string;
+    pricingName: string;
+    isCustomPricing: boolean;
+  }> {
+    const response = await api.post<{
+      weight: number;
+      price: number;
+      currency: string;
+      pricingName: string;
+      isCustomPricing: boolean;
+    }>('/api/admin/pricing/calculate', data);
+    return response.data;
   }
 }
 
 // Create API instance
-export const adminAPI = new AdminAPI(API_BASE_URL);
+export const adminAPI = new AdminAPI();
 
 // Utility functions
 export const formatDate = (dateString: string) => {

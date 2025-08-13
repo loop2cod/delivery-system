@@ -3,8 +3,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
-import axios from 'axios';
 import toast from 'react-hot-toast';
+import { api, adminAPI } from '@/lib/api';
 
 interface AdminUser {
   id: string;
@@ -38,12 +38,6 @@ interface AdminProviderProps {
   children: React.ReactNode;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-
-// Configure axios defaults
-axios.defaults.baseURL = API_URL;
-axios.defaults.withCredentials = true;
-
 export function AdminProvider({ children }: AdminProviderProps) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,20 +46,9 @@ export function AdminProvider({ children }: AdminProviderProps) {
 
   const isAuthenticated = !!user;
 
-  // Set up axios interceptors
+  // Set up axios interceptors for token refresh
   useEffect(() => {
-    const requestInterceptor = axios.interceptors.request.use(
-      (config) => {
-        const token = Cookies.get('admin_token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    const responseInterceptor = axios.interceptors.response.use(
+    const responseInterceptor = api.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
@@ -80,12 +63,8 @@ export function AdminProvider({ children }: AdminProviderProps) {
           
           try {
             await refreshToken();
-            // Retry the original request
-            const token = Cookies.get('admin_token');
-            if (token) {
-              originalRequest.headers.Authorization = `Bearer ${token}`;
-              return axios.request(originalRequest);
-            }
+            // Retry the original request - the interceptors will add the new token
+            return api.request(originalRequest);
           } catch (refreshError) {
             logout();
           }
@@ -95,8 +74,7 @@ export function AdminProvider({ children }: AdminProviderProps) {
     );
 
     return () => {
-      axios.interceptors.request.eject(requestInterceptor);
-      axios.interceptors.response.eject(responseInterceptor);
+      api.interceptors.response.eject(responseInterceptor);
     };
   }, [isRefreshing]);
 
@@ -153,16 +131,17 @@ export function AdminProvider({ children }: AdminProviderProps) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post('/api/auth/login', {
-        email,
-        password,
-      });
-
-      const { user: userData, token, refreshToken } = response.data;
+      const { user: userData, token, refreshToken: refreshTokenValue } = await adminAPI.login(email, password);
 
       // Store tokens
-      Cookies.set('admin_token', token, { expires: 7 }); // 7 days
-      Cookies.set('admin_refresh_token', refreshToken, { expires: 30 }); // 30 days
+      Cookies.set('admin_token', token, { expires: 7 }); // 7 days  
+      if (refreshTokenValue) {
+        Cookies.set('admin_refresh_token', refreshTokenValue, { expires: 30 }); // 30 days
+      }
+      
+      // Also store in localStorage for consistency
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
 
       setUser(userData);
       toast.success('Login successful');
@@ -176,12 +155,20 @@ export function AdminProvider({ children }: AdminProviderProps) {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    Cookies.remove('admin_token');
-    Cookies.remove('admin_refresh_token');
-    toast.success('Logged out successfully');
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await adminAPI.logout();
+    } catch (error) {
+      // Ignore logout errors
+    } finally {
+      setUser(null);
+      Cookies.remove('admin_token');
+      Cookies.remove('admin_refresh_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      toast.success('Logged out successfully');
+      router.push('/login');
+    }
   };
 
   const refreshToken = async () => {
@@ -196,18 +183,23 @@ export function AdminProvider({ children }: AdminProviderProps) {
         throw new Error('No refresh token available');
       }
 
-      const response = await axios.post('/api/auth/refresh', {
+      const response = await api.post('/api/auth/refresh', {
         refreshToken: refreshTokenValue,
       });
 
       const { token, refreshToken: newRefreshToken } = response.data;
 
       Cookies.set('admin_token', token, { expires: 7 });
-      Cookies.set('admin_refresh_token', newRefreshToken, { expires: 30 });
+      localStorage.setItem('token', token);
+      if (newRefreshToken) {
+        Cookies.set('admin_refresh_token', newRefreshToken, { expires: 30 });
+      }
     } catch (error) {
       console.error('Token refresh failed:', error);
       Cookies.remove('admin_token');
       Cookies.remove('admin_refresh_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
       throw error;
     } finally {
       setIsRefreshing(false);

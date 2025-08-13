@@ -130,12 +130,11 @@ const DeliveryRequestSchema = new Schema<IDeliveryRequest>({
   toObject: { virtuals: true }
 });
 
-// Indexes
+// Indexes (tracking_number index is already created by unique: true)
 DeliveryRequestSchema.index({ company_id: 1 });
 DeliveryRequestSchema.index({ created_by: 1 });
 DeliveryRequestSchema.index({ assigned_driver_id: 1 });
 DeliveryRequestSchema.index({ status: 1 });
-DeliveryRequestSchema.index({ tracking_number: 1 });
 DeliveryRequestSchema.index({ created_at: -1 });
 
 // Virtual for id

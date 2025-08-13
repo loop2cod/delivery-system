@@ -7,6 +7,7 @@ export * from './Driver';
 export * from './DeliveryRequest';
 export * from './AppSettings';
 export * from './UserSession';
+export * from './DeliveryPricing';
 
 // Import all models to ensure they are registered with mongoose
 import './User';
@@ -17,3 +18,4 @@ import './Driver';
 import './DeliveryRequest';
 import './AppSettings';
 import './UserSession';
+import './DeliveryPricing';

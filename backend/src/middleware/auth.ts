@@ -31,9 +31,9 @@ const publicRoutes = [
 
 // Role-based route access control
 const roleRouteMap: Record<string, UserRole[]> = {
-  '/api/admin': [UserRole.ADMIN],
-  '/api/business': [UserRole.BUSINESS, UserRole.ADMIN],
-  '/api/driver': [UserRole.DRIVER, UserRole.ADMIN]
+  '/api/admin': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
+  '/api/business': [UserRole.BUSINESS, UserRole.ADMIN, UserRole.SUPER_ADMIN],
+  '/api/driver': [UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN]
 };
 
 /**

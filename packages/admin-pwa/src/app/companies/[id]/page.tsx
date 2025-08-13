@@ -24,11 +24,14 @@ import {
   Shield,
   Copy,
   X,
+  DollarSign,
+  Package,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import PricingManager from '@/components/settings/PricingManager';
 
 const STATUS_COLORS = {
   ACTIVE: 'bg-green-100 text-green-800',
@@ -42,6 +45,25 @@ const ACCOUNT_TYPE_COLORS = {
   ENTERPRISE: 'bg-yellow-100 text-yellow-800',
 };
 
+interface PricingTier {
+  minWeight: number;
+  maxWeight?: number;
+  type: 'fixed' | 'per_kg';
+  price: number;
+}
+
+interface DeliveryPricing {
+  _id?: string;
+  name: string;
+  description?: string;
+  tiers: PricingTier[];
+  isActive: boolean;
+  isDefault: boolean;
+  companyId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export default function CompanyDetailPage() {
   const { isAuthenticated, isLoading } = useAdmin();
   const router = useRouter();
@@ -53,6 +75,9 @@ export default function CompanyDetailPage() {
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [newPassword, setNewPassword] = useState('');
+  const [activeTab, setActiveTab] = useState<'info' | 'pricing'>('info');
+  const [companyPricing, setCompanyPricing] = useState<DeliveryPricing | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -63,6 +88,7 @@ export default function CompanyDetailPage() {
   useEffect(() => {
     if (isAuthenticated && companyId) {
       loadCompany();
+      loadCompanyPricing();
     }
   }, [isAuthenticated, companyId]);
 
@@ -77,6 +103,33 @@ export default function CompanyDetailPage() {
       router.push('/companies');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompanyPricing = async () => {
+    setPricingLoading(true);
+    try {
+      const response = await fetch(`/api/admin/pricing/company/${companyId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCompanyPricing(data.pricing);
+      } else if (response.status === 404) {
+        // No company-specific pricing exists
+        setCompanyPricing(null);
+      } else {
+        console.error('Failed to load company pricing');
+        toast.error('Failed to load company pricing');
+      }
+    } catch (error) {
+      console.error('Error loading company pricing:', error);
+      toast.error('Error loading company pricing');
+    } finally {
+      setPricingLoading(false);
     }
   };
 
@@ -211,14 +264,48 @@ export default function CompanyDetailPage() {
         </div>
 
         {/* Status and Account Type */}
-        <div className="flex items-center space-x-4">
-          <Badge variant="secondary" className={STATUS_COLORS[company.status]}>
-            {company.status}
-          </Badge>
-          <Badge variant="secondary" className={ACCOUNT_TYPE_COLORS[company.account_type]}>
-            {company.account_type} Account
-          </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Badge variant="secondary" className={STATUS_COLORS[company.status]}>
+              {company.status}
+            </Badge>
+            <Badge variant="secondary" className={ACCOUNT_TYPE_COLORS[company.account_type]}>
+              {company.account_type} Account
+            </Badge>
+          </div>
         </div>
+
+        {/* Tabs */}
+        <Card>
+          <CardContent className="p-0">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8 px-6">
+                <button
+                  onClick={() => setActiveTab('info')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === 'info'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Company Information
+                </button>
+                <button
+                  onClick={() => setActiveTab('pricing')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === 'pricing'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Delivery Pricing
+                </button>
+              </nav>
+            </div>
+
+            {activeTab === 'info' && (
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Info */}
@@ -450,6 +537,33 @@ export default function CompanyDetailPage() {
             )}
           </div>
         </div>
+            )}
+
+            {activeTab === 'pricing' && (
+              <div className="p-6">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Company Delivery Pricing</h3>
+                  <p className="text-sm text-gray-500">
+                    Configure custom delivery pricing for {company?.name}. If no custom pricing is set, 
+                    the company will use the default pricing structure.
+                  </p>
+                </div>
+                
+                {pricingLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <PricingManager
+                    pricing={companyPricing}
+                    onUpdate={loadCompanyPricing}
+                    companyId={companyId}
+                  />
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Password Reset Modal */}
         {showPasswordResetModal && (

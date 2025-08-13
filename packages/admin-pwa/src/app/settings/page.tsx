@@ -4,18 +4,20 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/providers/AdminProvider';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Plus, Pencil, Trash2, Shield, Users, Settings, UserCheck, UserX } from 'lucide-react';
+import { Plus, Pencil, Trash2, Shield, Users, Settings, UserCheck, UserX, DollarSign, Weight, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import StaffModal from '@/components/settings/StaffModal';
+import PricingManager from '@/components/settings/PricingManager';
 import toast from 'react-hot-toast';
+import { adminAPI } from '@/lib/api';
 
 interface StaffMember {
   id: string;
   name: string;
   email: string;
   role: 'STAFF' | 'ADMIN' | 'SUPER_ADMIN';
-  permissions: {
+  permissions?: {
     dashboard: boolean;
     companies: boolean;
     drivers: boolean;
@@ -26,6 +28,25 @@ interface StaffMember {
   status: 'ACTIVE' | 'INACTIVE';
   created_at: string;
   last_login?: string;
+}
+
+interface PricingTier {
+  minWeight: number;
+  maxWeight?: number;
+  type: 'fixed' | 'per_kg';
+  price: number;
+}
+
+interface DeliveryPricing {
+  _id?: string;
+  name: string;
+  description?: string;
+  tiers: PricingTier[];
+  isActive: boolean;
+  isDefault: boolean;
+  companyId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 const ADMIN_SECTIONS = [
@@ -44,7 +65,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
-  const [activeTab, setActiveTab] = useState<'staff' | 'permissions'>('staff');
+  const [activeTab, setActiveTab] = useState<'staff' | 'permissions' | 'pricing'>('staff');
+  const [defaultPricing, setDefaultPricing] = useState<DeliveryPricing | null>(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
   const [stats, setStats] = useState({
     totalStaff: 0,
     activeStaff: 0,
@@ -61,39 +84,44 @@ export default function SettingsPage() {
   useEffect(() => {
     if (isAuthenticated) {
       loadStaffMembers();
+      loadDefaultPricing();
     }
   }, [isAuthenticated]);
 
   const loadStaffMembers = async () => {
     try {
-      const response = await fetch('/api/admin/staff', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const data = await adminAPI.getStaff();
+      
+      // Ensure all staff members have permissions object
+      const staffWithPermissions = (data.staff || []).map((staff: any) => ({
+        ...staff,
+        permissions: staff.permissions || {
+          dashboard: false,
+          companies: false,
+          drivers: false,
+          inquiries: false,
+          qr_management: false,
+          settings: false
         }
+      }));
+      
+      setStaffMembers(staffWithPermissions);
+      
+      // Calculate stats
+      const total = staffWithPermissions.length;
+      const active = staffWithPermissions.filter((s: StaffMember) => s.status === 'ACTIVE').length;
+      const admins = staffWithPermissions.filter((s: StaffMember) => s.role === 'ADMIN' || s.role === 'SUPER_ADMIN').length;
+      
+      setStats({
+        totalStaff: total,
+        activeStaff: active,
+        inactiveStaff: total - active,
+        admins: admins
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setStaffMembers(data.staff || []);
-        
-        // Calculate stats
-        const total = data.staff?.length || 0;
-        const active = data.staff?.filter((s: StaffMember) => s.status === 'ACTIVE').length || 0;
-        const admins = data.staff?.filter((s: StaffMember) => s.role === 'ADMIN' || s.role === 'SUPER_ADMIN').length || 0;
-        
-        setStats({
-          totalStaff: total,
-          activeStaff: active,
-          inactiveStaff: total - active,
-          admins: admins
-        });
-      } else {
-        console.error('Failed to load staff members');
-        toast.error('Failed to load staff members');
-      }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading staff members:', error);
-      toast.error('Error loading staff members');
+      const message = error.response?.data?.error || error.message || 'Failed to load staff members';
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -103,68 +131,62 @@ export default function SettingsPage() {
     if (!confirm('Are you sure you want to delete this staff member?')) return;
 
     try {
-      const response = await fetch(`/api/admin/staff/${staffId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        setStaffMembers(prev => prev.filter(staff => staff.id !== staffId));
-        toast.success('Staff member deleted successfully');
-        loadStaffMembers(); // Refresh stats
-      } else {
-        toast.error('Failed to delete staff member');
-      }
-    } catch (error) {
+      await adminAPI.deleteStaff(staffId);
+      setStaffMembers(prev => prev.filter(staff => staff.id !== staffId));
+      toast.success('Staff member deleted successfully');
+      loadStaffMembers(); // Refresh stats
+    } catch (error: any) {
       console.error('Error deleting staff member:', error);
-      toast.error('Error deleting staff member');
+      const message = error.response?.data?.error || error.message || 'Failed to delete staff member';
+      toast.error(message);
     }
   };
 
   const handleSaveStaff = async (staffData: any) => {
     try {
-      const url = editingStaff 
-        ? `/api/admin/staff/${editingStaff.id}`
-        : '/api/admin/staff';
+      let result;
       
-      const method = editingStaff ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(staffData)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        
-        if (editingStaff) {
-          // Update existing staff member
-          setStaffMembers(prev => prev.map(staff => 
-            staff.id === editingStaff.id ? result.staff : staff
-          ));
-        } else {
-          // Add new staff member
-          setStaffMembers(prev => [...prev, result.staff]);
-        }
-
-        setEditingStaff(null);
-        setShowAddModal(false);
-        toast.success(editingStaff ? 'Staff member updated successfully' : 'Staff member created successfully');
-        loadStaffMembers(); // Refresh stats
+      if (editingStaff) {
+        // Update existing staff member
+        result = await adminAPI.updateStaff(editingStaff.id, staffData);
+        setStaffMembers(prev => prev.map(staff => 
+          staff.id === editingStaff.id ? result.staff : staff
+        ));
+        toast.success('Staff member updated successfully');
       } else {
-        const error = await response.json();
-        toast.error(error.error || 'Failed to save staff member');
-        throw new Error(error.error);
+        // Create new staff member
+        result = await adminAPI.createStaff(staffData);
+        setStaffMembers(prev => [...prev, result.staff]);
+        toast.success('Staff member created successfully');
       }
-    } catch (error) {
+
+      setEditingStaff(null);
+      setShowAddModal(false);
+      loadStaffMembers(); // Refresh stats
+    } catch (error: any) {
       console.error('Error saving staff member:', error);
+      const message = error.response?.data?.error || error.message || 'Failed to save staff member';
+      toast.error(message);
       throw error;
+    }
+  };
+
+  const loadDefaultPricing = async () => {
+    setPricingLoading(true);
+    try {
+      const data = await adminAPI.getDefaultPricing();
+      setDefaultPricing(data.pricing);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        // No default pricing exists yet
+        setDefaultPricing(null);
+      } else {
+        console.error('Error loading default pricing:', error);
+        const message = error.response?.data?.error || error.message || 'Failed to load default pricing';
+        toast.error(message);
+      }
+    } finally {
+      setPricingLoading(false);
     }
   };
 
@@ -172,27 +194,16 @@ export default function SettingsPage() {
     const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
 
     try {
-      const response = await fetch(`/api/admin/staff/${staffId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (response.ok) {
-        setStaffMembers(prev => prev.map(staff => 
-          staff.id === staffId ? { ...staff, status: newStatus as 'ACTIVE' | 'INACTIVE' } : staff
-        ));
-        toast.success(`Staff member ${newStatus.toLowerCase()}`);
-        loadStaffMembers(); // Refresh stats
-      } else {
-        toast.error('Failed to update staff status');
-      }
-    } catch (error) {
+      await adminAPI.updateStaff(staffId, { status: newStatus });
+      setStaffMembers(prev => prev.map(staff => 
+        staff.id === staffId ? { ...staff, status: newStatus as 'ACTIVE' | 'INACTIVE' } : staff
+      ));
+      toast.success(`Staff member ${newStatus.toLowerCase()}`);
+      loadStaffMembers(); // Refresh stats
+    } catch (error: any) {
       console.error('Error updating staff status:', error);
-      toast.error('Error updating staff status');
+      const message = error.response?.data?.error || error.message || 'Failed to update staff status';
+      toast.error(message);
     }
   };
 
@@ -368,6 +379,17 @@ export default function SettingsPage() {
                   <Shield className="w-4 h-4 mr-2" />
                   Permission Overview
                 </button>
+                <button
+                  onClick={() => setActiveTab('pricing')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === 'pricing'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Delivery Pricing
+                </button>
               </nav>
             </div>
 
@@ -417,7 +439,10 @@ export default function SettingsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {Object.entries(staff.permissions).filter(([_, allowed]) => allowed).length} of {Object.keys(staff.permissions).length} sections
+                        {staff.permissions ? 
+                          `${Object.entries(staff.permissions).filter(([_, allowed]) => allowed).length} of ${Object.keys(staff.permissions).length} sections`
+                          : 'No permissions set'
+                        }
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -493,7 +518,7 @@ export default function SettingsPage() {
                           <div className="text-sm">
                             <span className="text-gray-500">Staff with access: </span>
                             <span className="font-medium text-primary">
-                              {staffMembers.filter(staff => staff.permissions[section.key as keyof StaffMember['permissions']]).length}
+                              {staffMembers.filter(staff => staff.permissions && staff.permissions[section.key as keyof StaffMember['permissions']]).length}
                             </span>
                           </div>
                         </div>
@@ -502,6 +527,29 @@ export default function SettingsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'pricing' && (
+              <div className="p-6">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Default Delivery Pricing</h3>
+                  <p className="text-sm text-gray-500">
+                    Configure the default pricing structure that will be applied to all companies. 
+                    Individual companies can have custom pricing set from the Companies management page.
+                  </p>
+                </div>
+                
+                {pricingLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <PricingManager
+                    pricing={defaultPricing}
+                    onUpdate={loadDefaultPricing}
+                  />
+                )}
               </div>
             )}
           </CardContent>

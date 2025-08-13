@@ -69,11 +69,10 @@ const UserSessionSchema = new Schema<IUserSession>({
   toObject: { virtuals: true }
 });
 
-// Indexes
+// Indexes (expires_at index is already created by the TTL index)
 UserSessionSchema.index({ user_id: 1 });
 UserSessionSchema.index({ token_hash: 1 });
 UserSessionSchema.index({ refresh_token_hash: 1 });
-UserSessionSchema.index({ expires_at: 1 });
 
 // Virtual for id
 UserSessionSchema.virtual('id').get(function() {
