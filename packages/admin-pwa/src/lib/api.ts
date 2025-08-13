@@ -279,6 +279,7 @@ export interface DeliveryPricing {
   isActive: boolean;
   isDefault: boolean;
   companyId?: string;
+  isCustomized?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -563,8 +564,26 @@ class AdminAPI {
     name: string;
     description?: string;
     tiers: PricingTier[];
-  }): Promise<{ message: string; pricing: DeliveryPricing }> {
-    const response = await api.post<{ message: string; pricing: DeliveryPricing }>(
+  }): Promise<{ 
+    message: string; 
+    pricing: DeliveryPricing;
+    syncStats?: {
+      companiesUpdated: number;
+      companiesCreated: number;
+      companiesSkipped: number;
+      totalCompanies: number;
+    }
+  }> {
+    const response = await api.post<{ 
+      message: string; 
+      pricing: DeliveryPricing;
+      syncStats?: {
+        companiesUpdated: number;
+        companiesCreated: number;
+        companiesSkipped: number;
+        totalCompanies: number;
+      }
+    }>(
       '/api/admin/pricing/default',
       pricingData
     );
@@ -590,10 +609,29 @@ class AdminAPI {
     return response.data;
   }
 
-  async removeCompanyPricing(companyId: string): Promise<{ message: string; deletedCount: number }> {
-    const response = await api.delete<{ message: string; deletedCount: number }>(
+  async removeCompanyPricing(companyId: string): Promise<{ message: string; pricing: DeliveryPricing }> {
+    const response = await api.delete<{ message: string; pricing: DeliveryPricing }>(
       `/api/admin/pricing/company/${companyId}`
     );
+    return response.data;
+  }
+
+  async syncAllCompaniesWithDefaultPricing(): Promise<{ 
+    message: string; 
+    syncStats: {
+      companiesCreated: number;
+      companiesSkipped: number;
+      totalCompanies: number;
+    }
+  }> {
+    const response = await api.post<{ 
+      message: string; 
+      syncStats: {
+        companiesCreated: number;
+        companiesSkipped: number;
+        totalCompanies: number;
+      }
+    }>('/api/admin/pricing/sync-all');
     return response.data;
   }
 

@@ -1622,6 +1622,9 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      // Get all companies to sync pricing
+      const companies = await db.findMany('companies', {});
+      
       // Remove existing default pricing
       await DeliveryPricing.deleteMany({ 
         isDefault: true, 
@@ -1629,7 +1632,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       });
 
       // Create new default pricing
-      const pricingData = {
+      const defaultPricingData = {
         name,
         description,
         tiers: sortedTiers,
@@ -1637,12 +1640,58 @@ export async function adminRoutes(fastify: FastifyInstance) {
         isDefault: true
       };
 
-      const newPricing = new DeliveryPricing(pricingData);
-      await newPricing.save();
+      const newDefaultPricing = new DeliveryPricing(defaultPricingData);
+      await newDefaultPricing.save();
+
+      // Sync default pricing to all companies that don't have custom pricing
+      // or create company-specific pricing for companies that don't have any
+      let syncedCount = 0;
+      let createdCount = 0;
+      let skippedCount = 0;
+
+      for (const company of companies) {
+        const existingPricing = await DeliveryPricing.findOne({ 
+          companyId: company._id.toString() 
+        });
+
+        if (!existingPricing) {
+          // Create company-specific pricing based on default
+          const companyPricingData = {
+            name: `${name} - ${company.name}`,
+            description: description || `Delivery pricing for ${company.name}`,
+            tiers: sortedTiers,
+            isActive: true,
+            isDefault: false,
+            companyId: company._id.toString(),
+            isCustomized: false // Mark as not customized, synced with default
+          };
+
+          const companyPricing = new DeliveryPricing(companyPricingData);
+          await companyPricing.save();
+          createdCount++;
+        } else if (!existingPricing.isCustomized) {
+          // Update existing company pricing with new default values
+          // Only if it hasn't been manually customized
+          existingPricing.name = `${name} - ${company.name}`;
+          existingPricing.description = description || `Delivery pricing for ${company.name}`;
+          existingPricing.tiers = sortedTiers;
+          await existingPricing.save();
+          syncedCount++;
+        } else {
+          // Skip companies with customized pricing
+          skippedCount++;
+        }
+      }
 
       return {
-        message: 'Default pricing updated successfully',
-        pricing: newPricing
+        message: 'Default pricing updated and synced to companies successfully',
+        pricing: newDefaultPricing,
+        syncStats: {
+          companiesUpdated: syncedCount,
+          companiesCreated: createdCount,
+          companiesSkipped: skippedCount,
+          totalCompanies: companies.length
+        }
       };
     } catch (error: any) {
       return reply.code(500).send({ 
@@ -1660,15 +1709,53 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid company ID' });
     }
 
-    const pricing = await DeliveryPricing.getPricingForCompany(companyId);
-
-    if (!pricing) {
-      return reply.code(404).send({ error: 'No pricing found for this company' });
+    // Check if company exists
+    const company = await db.findOne('companies', { _id: new ObjectId(companyId) });
+    if (!company) {
+      return reply.code(404).send({ error: 'Company not found' });
     }
+
+    // First try to get company-specific pricing
+    let pricing = await DeliveryPricing.findOne({ 
+      companyId, 
+      isActive: true 
+    });
+
+    if (pricing) {
+      return {
+        pricing,
+        isCustom: !!pricing.companyId
+      };
+    }
+
+    // If no company-specific pricing exists, check for default pricing
+    const defaultPricing = await DeliveryPricing.findOne({ 
+      isDefault: true, 
+      isActive: true,
+      companyId: { $exists: false }
+    });
+
+    if (!defaultPricing) {
+      return reply.code(404).send({ error: 'No pricing configuration found. Please set up default pricing first.' });
+    }
+
+    // Create company-specific pricing based on default
+    const companyPricingData = {
+      name: `${defaultPricing.name} - ${company.name}`,
+      description: defaultPricing.description || `Delivery pricing for ${company.name}`,
+      tiers: defaultPricing.tiers,
+      isActive: true,
+      isDefault: false,
+      companyId,
+      isCustomized: false // Mark as synced with default
+    };
+
+    pricing = new DeliveryPricing(companyPricingData);
+    await pricing.save();
 
     return {
       pricing,
-      isCustom: !!pricing.companyId
+      isCustom: false // It's synced with default, not custom
     };
   }));
 
@@ -1729,7 +1816,8 @@ export async function adminRoutes(fastify: FastifyInstance) {
         tiers: sortedTiers,
         isActive: true,
         isDefault: false,
-        companyId
+        companyId,
+        isCustomized: true // Mark as customized since it's manually set
       };
 
       const newPricing = new DeliveryPricing(pricingData);
@@ -1755,12 +1843,104 @@ export async function adminRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid company ID' });
     }
 
-    const deleted = await DeliveryPricing.deleteMany({ companyId });
+    // Check if company exists
+    const company = await db.findOne('companies', { _id: new ObjectId(companyId) });
+    if (!company) {
+      return reply.code(404).send({ error: 'Company not found' });
+    }
+
+    // Get default pricing to sync with
+    const defaultPricing = await DeliveryPricing.findOne({ 
+      isDefault: true, 
+      companyId: { $exists: false } 
+    });
+
+    if (!defaultPricing) {
+      return reply.code(404).send({ error: 'No default pricing found to sync with' });
+    }
+
+    // Remove existing company-specific pricing
+    await DeliveryPricing.deleteMany({ companyId });
+
+    // Create new company pricing based on default (not customized)
+    const companyPricingData = {
+      name: `${defaultPricing.name} - ${company.name}`,
+      description: defaultPricing.description || `Delivery pricing for ${company.name}`,
+      tiers: defaultPricing.tiers,
+      isActive: true,
+      isDefault: false,
+      companyId,
+      isCustomized: false // Mark as synced with default
+    };
+
+    const newPricing = new DeliveryPricing(companyPricingData);
+    await newPricing.save();
 
     return {
-      message: 'Company-specific pricing removed successfully',
-      deletedCount: deleted.deletedCount
+      message: 'Company pricing reset to default successfully',
+      pricing: newPricing
     };
+  }));
+
+  // Sync all companies with default pricing (utility endpoint)
+  fastify.post('/pricing/sync-all', asyncHandler(async (request, reply) => {
+    try {
+      // Get default pricing
+      const defaultPricing = await DeliveryPricing.findOne({ 
+        isDefault: true, 
+        isActive: true,
+        companyId: { $exists: false }
+      });
+
+      if (!defaultPricing) {
+        return reply.code(404).send({ error: 'No default pricing found. Please set up default pricing first.' });
+      }
+
+      // Get all companies
+      const companies = await db.findMany('companies', {});
+      
+      let syncedCount = 0;
+      let skippedCount = 0;
+
+      for (const company of companies) {
+        const existingPricing = await DeliveryPricing.findOne({ 
+          companyId: company._id.toString() 
+        });
+
+        if (!existingPricing) {
+          // Create company-specific pricing based on default
+          const companyPricingData = {
+            name: `${defaultPricing.name} - ${company.name}`,
+            description: defaultPricing.description || `Delivery pricing for ${company.name}`,
+            tiers: defaultPricing.tiers,
+            isActive: true,
+            isDefault: false,
+            companyId: company._id.toString(),
+            isCustomized: false // Mark as synced with default
+          };
+
+          const companyPricing = new DeliveryPricing(companyPricingData);
+          await companyPricing.save();
+          syncedCount++;
+        } else {
+          skippedCount++;
+        }
+      }
+
+      return {
+        message: 'Companies synced with default pricing successfully',
+        syncStats: {
+          companiesCreated: syncedCount,
+          companiesSkipped: skippedCount,
+          totalCompanies: companies.length
+        }
+      };
+    } catch (error: any) {
+      return reply.code(500).send({ 
+        error: 'Failed to sync companies with default pricing',
+        details: error.message 
+      });
+    }
   }));
 
   // Calculate price for a given weight and company

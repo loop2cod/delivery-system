@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import StaffModal from '@/components/settings/StaffModal';
 import PricingManager from '@/components/settings/PricingManager';
 import toast from 'react-hot-toast';
-import { adminAPI } from '@/lib/api';
+import { adminAPI, PricingTier, DeliveryPricing } from '@/lib/api';
 
 interface StaffMember {
   id: string;
@@ -30,24 +30,7 @@ interface StaffMember {
   last_login?: string;
 }
 
-interface PricingTier {
-  minWeight: number;
-  maxWeight?: number;
-  type: 'fixed' | 'per_kg';
-  price: number;
-}
 
-interface DeliveryPricing {
-  _id?: string;
-  name: string;
-  description?: string;
-  tiers: PricingTier[];
-  isActive: boolean;
-  isDefault: boolean;
-  companyId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
 
 const ADMIN_SECTIONS = [
   { key: 'dashboard', label: 'Dashboard', description: 'View system overview and analytics' },
@@ -203,6 +186,30 @@ export default function SettingsPage() {
     } catch (error: any) {
       console.error('Error updating staff status:', error);
       const message = error.response?.data?.error || error.message || 'Failed to update staff status';
+      toast.error(message);
+    }
+  };
+
+  const handleSyncAllCompanies = async () => {
+    if (!confirm('This will create pricing records for all companies that don\'t have them yet, based on the current default pricing. Continue?')) {
+      return;
+    }
+
+    try {
+      const result = await adminAPI.syncAllCompaniesWithDefaultPricing();
+      const { companiesCreated, companiesSkipped, totalCompanies } = result.syncStats;
+      
+      if (companiesCreated > 0) {
+        toast.success(
+          `Successfully synced ${companiesCreated} companies with default pricing. ` +
+          `${companiesSkipped} companies already had pricing.`
+        );
+      } else {
+        toast.success('All companies already have pricing configured.');
+      }
+    } catch (error: any) {
+      console.error('Error syncing companies:', error);
+      const message = error.response?.data?.error || error.message || 'Failed to sync companies';
       toast.error(message);
     }
   };
@@ -533,11 +540,26 @@ export default function SettingsPage() {
             {activeTab === 'pricing' && (
               <div className="p-6">
                 <div className="mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Default Delivery Pricing</h3>
-                  <p className="text-sm text-gray-500">
-                    Configure the default pricing structure that will be applied to all companies. 
-                    Individual companies can have custom pricing set from the Companies management page.
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900">Default Delivery Pricing</h3>
+                    <Button
+                      variant="outline"
+                      onClick={handleSyncAllCompanies}
+                      disabled={!defaultPricing}
+                      className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                    >
+                      Sync All Companies
+                    </Button>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-2">
+                    Configure the default pricing structure that will be automatically applied to all companies.
                   </p>
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                    <p className="text-sm text-amber-700">
+                      <strong>Important:</strong> When you update default pricing, it will automatically sync to all companies 
+                      that haven't been customized. Companies with custom pricing will remain unchanged.
+                    </p>
+                  </div>
                 </div>
                 
                 {pricingLoading ? (

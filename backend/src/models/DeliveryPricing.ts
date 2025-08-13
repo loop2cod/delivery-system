@@ -14,6 +14,7 @@ export interface DeliveryPricingData {
   isActive: boolean;      // Whether this pricing is active
   isDefault: boolean;     // Whether this is the default pricing for new companies
   companyId?: string;     // If set, this pricing is company-specific
+  isCustomized?: boolean; // Whether company-specific pricing has been manually customized
   createdAt: Date;
   updatedAt: Date;
 }
@@ -108,6 +109,10 @@ const DeliveryPricingSchema = new Schema({
   companyId: {
     type: String,
     sparse: true // Allows multiple null values but unique non-null values
+  },
+  isCustomized: {
+    type: Boolean,
+    default: false // false means it's synced with default, true means manually customized
   }
 }, {
   timestamps: true

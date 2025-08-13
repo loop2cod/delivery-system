@@ -5,26 +5,7 @@ import { Plus, Minus, Save, Calculator, Weight, DollarSign } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import toast from 'react-hot-toast';
-import { adminAPI } from '@/lib/api';
-
-interface PricingTier {
-  minWeight: number;
-  maxWeight?: number;
-  type: 'fixed' | 'per_kg';
-  price: number;
-}
-
-interface DeliveryPricing {
-  _id?: string;
-  name: string;
-  description?: string;
-  tiers: PricingTier[];
-  isActive: boolean;
-  isDefault: boolean;
-  companyId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
+import { adminAPI, PricingTier, DeliveryPricing } from '@/lib/api';
 
 interface PricingManagerProps {
   pricing: DeliveryPricing | null;
@@ -195,8 +176,23 @@ export default function PricingManager({ pricing, onUpdate, companyId }: Pricing
         toast.success('Company pricing updated successfully');
       } else {
         // Default pricing
-        await adminAPI.createOrUpdateDefaultPricing(formData);
-        toast.success('Default pricing updated successfully');
+        const result = await adminAPI.createOrUpdateDefaultPricing(formData);
+        
+        if (result.syncStats) {
+          const { companiesUpdated, companiesCreated, companiesSkipped, totalCompanies } = result.syncStats;
+          const syncedTotal = companiesUpdated + companiesCreated;
+          
+          if (syncedTotal > 0) {
+            toast.success(
+              `Default pricing updated and synced to ${syncedTotal} companies. ` +
+              `${companiesSkipped > 0 ? `${companiesSkipped} companies with custom pricing were not affected.` : ''}`
+            );
+          } else {
+            toast.success('Default pricing updated successfully');
+          }
+        } else {
+          toast.success('Default pricing updated successfully');
+        }
       }
       
       setIsEditing(false);
@@ -204,6 +200,28 @@ export default function PricingManager({ pricing, onUpdate, companyId }: Pricing
     } catch (error: any) {
       console.error('Error saving pricing:', error);
       const message = error.response?.data?.error || error.message || 'Failed to save pricing';
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetToDefault = async () => {
+    if (!companyId) return;
+    
+    if (!confirm('Are you sure you want to reset this company\'s pricing to match the default pricing? This will overwrite any custom pricing settings.')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Remove the company-specific pricing to revert to default
+      await adminAPI.removeCompanyPricing(companyId);
+      toast.success('Company pricing reset to default successfully');
+      onUpdate();
+    } catch (error: any) {
+      console.error('Error resetting pricing:', error);
+      const message = error.response?.data?.error || error.message || 'Failed to reset pricing';
       toast.error(message);
     } finally {
       setSaving(false);
@@ -258,10 +276,34 @@ export default function PricingManager({ pricing, onUpdate, companyId }: Pricing
               {pricing.description && (
                 <p className="text-sm text-gray-600 mt-1">{pricing.description}</p>
               )}
+              {companyId && (
+                <div className="mt-2 flex items-center space-x-2">
+                  {pricing.isCustomized ? (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Custom Pricing
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Synced with Default
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-            <Button onClick={() => setIsEditing(true)}>
-              Edit Pricing
-            </Button>
+            <div className="flex space-x-2">
+              <Button onClick={() => setIsEditing(true)}>
+                Edit Pricing
+              </Button>
+              {companyId && pricing.isCustomized && (
+                <Button 
+                  variant="outline" 
+                  onClick={handleResetToDefault}
+                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                >
+                  Reset to Default
+                </Button>
+              )}
+            </div>
           </div>
 
           <Card>

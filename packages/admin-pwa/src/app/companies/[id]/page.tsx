@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAdmin } from '@/providers/AdminProvider';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { adminAPI, Company, formatDate } from '@/lib/api';
+import { adminAPI, Company, formatDate, PricingTier, DeliveryPricing } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -45,24 +45,7 @@ const ACCOUNT_TYPE_COLORS = {
   ENTERPRISE: 'bg-yellow-100 text-yellow-800',
 };
 
-interface PricingTier {
-  minWeight: number;
-  maxWeight?: number;
-  type: 'fixed' | 'per_kg';
-  price: number;
-}
 
-interface DeliveryPricing {
-  _id?: string;
-  name: string;
-  description?: string;
-  tiers: PricingTier[];
-  isActive: boolean;
-  isDefault: boolean;
-  companyId?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
 
 export default function CompanyDetailPage() {
   const { isAuthenticated, isLoading } = useAdmin();
@@ -109,25 +92,17 @@ export default function CompanyDetailPage() {
   const loadCompanyPricing = async () => {
     setPricingLoading(true);
     try {
-      const response = await fetch(`/api/admin/pricing/company/${companyId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCompanyPricing(data.pricing);
-      } else if (response.status === 404) {
+      const data = await adminAPI.getCompanyPricing(companyId);
+      setCompanyPricing(data.pricing);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
         // No company-specific pricing exists
         setCompanyPricing(null);
       } else {
-        console.error('Failed to load company pricing');
-        toast.error('Failed to load company pricing');
+        console.error('Error loading company pricing:', error);
+        const message = error.response?.data?.error || error.message || 'Failed to load company pricing';
+        toast.error(message);
       }
-    } catch (error) {
-      console.error('Error loading company pricing:', error);
-      toast.error('Error loading company pricing');
     } finally {
       setPricingLoading(false);
     }
@@ -543,10 +518,21 @@ export default function CompanyDetailPage() {
               <div className="p-6">
                 <div className="mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Company Delivery Pricing</h3>
-                  <p className="text-sm text-gray-500">
-                    Configure custom delivery pricing for {company?.name}. If no custom pricing is set, 
-                    the company will use the default pricing structure.
+                  <p className="text-sm text-gray-500 mb-2">
+                    Configure delivery pricing for {company?.name}. Companies automatically receive updates 
+                    when default pricing changes, unless they have custom pricing.
                   </p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p className="text-sm text-blue-700">
+                      <strong>How pricing sync works:</strong>
+                    </p>
+                    <ul className="text-sm text-blue-600 mt-1 ml-4 list-disc">
+                      <li>Companies start with default pricing from Settings</li>
+                      <li>When default pricing is updated, all non-customized companies get the new pricing</li>
+                      <li>Once you customize pricing here, this company won't receive automatic updates</li>
+                      <li>You can reset to default anytime to resume automatic sync</li>
+                    </ul>
+                  </div>
                 </div>
                 
                 {pricingLoading ? (
