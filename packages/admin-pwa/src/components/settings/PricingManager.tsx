@@ -50,27 +50,64 @@ export default function PricingManager({ pricing, onUpdate, companyId }: Pricing
   }, [pricing, companyId]);
 
   const calculatePrice = (weight: number, tiers: PricingTier[]): number => {
-    const sortedTiers = [...tiers].sort((a, b) => a.minWeight - b.minWeight);
+    if (weight <= 0) return 0;
     
-    for (const tier of sortedTiers) {
-      const inRange = weight >= tier.minWeight && (!tier.maxWeight || weight <= tier.maxWeight);
+    const sortedTiers = [...tiers].sort((a, b) => a.minWeight - b.minWeight);
+    let totalPrice = 0;
+    
+    for (let i = 0; i < sortedTiers.length; i++) {
+      const tier = sortedTiers[i];
+      const nextTier = sortedTiers[i + 1];
       
-      if (inRange) {
-        if (tier.type === 'fixed') {
-          return tier.price;
+      // Calculate the weight range for this tier
+      let tierMinWeight = tier.minWeight;
+      let tierMaxWeight = tier.maxWeight;
+      
+      // If no maxWeight specified and there's a next tier, use next tier's minWeight
+      if (!tierMaxWeight && nextTier) {
+        tierMaxWeight = nextTier.minWeight;
+      }
+      
+      // Skip if the total weight doesn't reach this tier
+      if (weight <= tierMinWeight) {
+        break;
+      }
+      
+      // Calculate weight that falls into this tier
+      let weightInThisTier = 0;
+      
+      if (tierMaxWeight) {
+        // Tier has a maximum weight
+        if (weight <= tierMaxWeight) {
+          // All remaining weight fits in this tier
+          weightInThisTier = weight - tierMinWeight;
         } else {
-          return weight * tier.price;
+          // Only part of the weight fits in this tier
+          weightInThisTier = tierMaxWeight - tierMinWeight;
         }
+      } else {
+        // Tier has no maximum weight (last tier)
+        weightInThisTier = weight - tierMinWeight;
+      }
+      
+      // Calculate price for this tier
+      if (weightInThisTier > 0) {
+        if (tier.type === 'fixed') {
+          // Fixed price for this entire tier range
+          totalPrice += tier.price;
+        } else if (tier.type === 'per_kg') {
+          // Per kg price for the weight in this tier
+          totalPrice += weightInThisTier * tier.price;
+        }
+      }
+      
+      // If we've processed all the weight, break
+      if (tierMaxWeight && weight <= tierMaxWeight) {
+        break;
       }
     }
     
-    // If no tier matches, use the last tier
-    const lastTier = sortedTiers[sortedTiers.length - 1];
-    if (lastTier.type === 'fixed') {
-      return lastTier.price;
-    } else {
-      return weight * lastTier.price;
-    }
+    return totalPrice;
   };
 
   const handleTestPrice = () => {

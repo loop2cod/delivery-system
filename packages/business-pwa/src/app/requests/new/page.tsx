@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { NewRequestForm } from '@/components/requests/NewRequestForm';
+import { businessAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
 import {
   ArrowLeftIcon,
@@ -12,7 +13,6 @@ import {
 } from '@heroicons/react/24/outline';
 
 interface DeliveryRequestFormData {
-  serviceType: string;
   priority: 'normal' | 'high' | 'urgent';
   pickupDetails: {
     contactName: string;
@@ -67,25 +67,27 @@ export default function NewRequestPage() {
     return null;
   }
 
-  const handleSubmit = async (data: DeliveryRequestFormData) => {
+  const handleSubmit = async (data: any) => {
     setIsSubmitting(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Submitting delivery request:', {
+        ...data,
+        companyId: user?.company.id,
+        submittedBy: `${user?.firstName} ${user?.lastName}`
+      });
       
-      // Generate request ID
-      const requestId = `REQ-${Date.now()}`;
+      // Submit to backend API
+      const response = await businessAPI.createRequest(data);
       
-      console.log('Submitting delivery request:', { ...data, requestId, companyId: user?.company.id });
-      
-      toast.success(`Delivery request ${requestId} submitted successfully!`);
+      toast.success(`Delivery request ${response.requestNumber} submitted successfully!`);
       
       // Redirect to request details or dashboard
-      router.push(`/requests/${requestId}`);
-    } catch (error) {
+      router.push(`/requests`);
+    } catch (error: any) {
       console.error('Failed to submit request:', error);
-      toast.error('Failed to submit request. Please try again.');
+      const message = error.response?.data?.error || error.message || 'Failed to submit request. Please try again.';
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

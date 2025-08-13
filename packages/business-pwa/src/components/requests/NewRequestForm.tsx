@@ -17,9 +17,9 @@ import {
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { businessAPI, calculateTotalWeight, formatPrice, formatWeight, PriceCalculation } from '@/lib/api';
 
 const deliveryRequestSchema = z.object({
-  serviceType: z.string().min(1, 'Service type is required'),
   priority: z.enum(['normal', 'high', 'urgent']),
   pickupDetails: z.object({
     contactName: z.string().min(1, 'Contact name is required'),
@@ -53,13 +53,6 @@ const deliveryRequestSchema = z.object({
 
 type DeliveryRequestFormData = z.infer<typeof deliveryRequestSchema>;
 
-const serviceTypes = [
-  { value: 'same_day', label: 'Same-Day Delivery', description: 'Delivered within the same day' },
-  { value: 'express', label: 'Express Delivery', description: 'Priority delivery within 4 hours' },
-  { value: 'document', label: 'Document Delivery', description: 'Secure document transportation' },
-  { value: 'fragile', label: 'Fragile Items', description: 'Special handling for delicate items' },
-  { value: 'inter_emirate', label: 'Inter-Emirate', description: 'Delivery between emirates' },
-];
 
 const priorityOptions = [
   { value: 'normal', label: 'Normal', description: 'Standard processing', color: 'bg-gray-100 text-gray-800' },
@@ -91,10 +84,14 @@ interface NewRequestFormProps {
 
 export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: NewRequestFormProps) {
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
+  const [priceCalculation, setPriceCalculation] = useState<PriceCalculation | null>(null);
+  const [calculatingPrice, setCalculatingPrice] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [company, setCompany] = useState<Company | null>(null);
   const [loadingCompany, setLoadingCompany] = useState(false);
-  const totalSteps = 4;
+  const [companyPricing, setCompanyPricing] = useState<any>(null);
+  const [loadingPricing, setLoadingPricing] = useState(false);
+  const totalSteps = 3;
 
   const {
     register,
@@ -107,7 +104,6 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
   } = useForm<DeliveryRequestFormData>({
     resolver: zodResolver(deliveryRequestSchema),
     defaultValues: {
-      serviceType: '',
       priority: 'normal',
       items: [{ description: '', quantity: 1, fragile: false }],
       pickupDetails: { contactName: '', phone: '', address: '', instructions: '' },
@@ -123,9 +119,10 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
 
   const watchedValues = watch();
 
-  // Load company profile on component mount
+  // Load company profile and pricing on component mount
   useEffect(() => {
     loadCompanyProfile();
+    loadCompanyPricing();
   }, []);
 
   // Auto-fill pickup details when company profile is loaded and pickup details are empty
@@ -138,13 +135,24 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
   const loadCompanyProfile = async () => {
     try {
       setLoadingCompany(true);
-      const response = await axios.get('/api/business/profile');
-      setCompany(response.data.company);
+      const response = await businessAPI.getProfile();
+      setCompany(response.company);
     } catch (error) {
       console.error('Failed to load company profile:', error);
-      // Don't show error toast as this is not critical functionality
     } finally {
       setLoadingCompany(false);
+    }
+  };
+
+  const loadCompanyPricing = async () => {
+    try {
+      setLoadingPricing(true);
+      const pricing = await businessAPI.getCompanyPricing();
+      setCompanyPricing(pricing);
+    } catch (error) {
+      console.error('Failed to load company pricing:', error);
+    } finally {
+      setLoadingPricing(false);
     }
   };
 
@@ -184,45 +192,159 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     setValue('pickupDetails.address', fullAddress);
   };
 
-  // Calculate estimated cost based on form data
-  const calculateEstimatedCost = () => {
-    const serviceType = watchedValues.serviceType;
+  // Calculate price for individual item weight using cumulative tier pricing
+  const calculatePriceForWeight = (weight: number): number => {
+    if (!companyPricing?.pricing?.tiers || weight <= 0) return 0;
+    
+    const tiers = companyPricing.pricing.tiers;
+    const sortedTiers = tiers.sort((a: any, b: any) => a.minWeight - b.minWeight);
+    
+    let totalPrice = 0;
+    
+    for (let i = 0; i < sortedTiers.length; i++) {
+      const tier = sortedTiers[i];
+      const nextTier = sortedTiers[i + 1];
+      
+      // Calculate the weight range for this tier
+      let tierMinWeight = tier.minWeight;
+      let tierMaxWeight = tier.maxWeight;
+      
+      // If no maxWeight specified and there's a next tier, use next tier's minWeight
+      if (!tierMaxWeight && nextTier) {
+        tierMaxWeight = nextTier.minWeight;
+      }
+      
+      // Skip if the total weight doesn't reach this tier
+      if (weight <= tierMinWeight) {
+        break;
+      }
+      
+      // Calculate weight that falls into this tier
+      let weightInThisTier = 0;
+      
+      if (tierMaxWeight) {
+        // Tier has a maximum weight
+        if (weight <= tierMaxWeight) {
+          // All remaining weight fits in this tier
+          weightInThisTier = weight - tierMinWeight;
+        } else {
+          // Only part of the weight fits in this tier
+          weightInThisTier = tierMaxWeight - tierMinWeight;
+        }
+      } else {
+        // Tier has no maximum weight (last tier)
+        weightInThisTier = weight - tierMinWeight;
+      }
+      
+      // Calculate price for this tier
+      if (weightInThisTier > 0) {
+        if (tier.type === 'fixed') {
+          // Fixed price for this entire tier range
+          totalPrice += tier.price;
+        } else if (tier.type === 'per_kg') {
+          // Per kg price for the weight in this tier
+          totalPrice += weightInThisTier * tier.price;
+        }
+      }
+      
+      // If we've processed all the weight, break
+      if (tierMaxWeight && weight <= tierMaxWeight) {
+        break;
+      }
+    }
+    
+    // Apply priority multiplier
     const priority = watchedValues.priority;
-    const itemCount = watchedValues.items?.length || 0;
-    
-    let baseCost = 35; // Base cost
-    
-    // Service type multiplier
-    const serviceMultipliers = {
-      same_day: 1.0,
-      express: 1.5,
-      document: 0.8,
-      fragile: 1.3,
-      inter_emirate: 2.0,
-    };
-    const serviceMultiplier = serviceMultipliers[serviceType as keyof typeof serviceMultipliers] || 1.0;
-    
-    // Priority multiplier
     const priorityMultiplier = {
       normal: 1.0,
       high: 1.2,
       urgent: 1.5,
-    }[priority];
+    }[priority] || 1.0;
     
-    // Item count multiplier
-    const itemMultiplier = 1 + (itemCount - 1) * 0.1;
-    
-    const total = baseCost * serviceMultiplier * priorityMultiplier * itemMultiplier;
-    setEstimatedCost(Math.round(total));
+    return Math.round(totalPrice * priorityMultiplier);
   };
 
-  // Recalculate cost when relevant fields change
-  useState(() => {
-    calculateEstimatedCost();
-  });
+  // Calculate price based on weight using company-specific pricing
+  const calculatePriceFromWeight = async () => {
+    const items = watchedValues.items || [];
+    const totalWeight = calculateTotalWeight(items);
+    
+    if (totalWeight <= 0) {
+      setEstimatedCost(null);
+      setPriceCalculation(null);
+      return;
+    }
 
-  const handleFormSubmit = (data: DeliveryRequestFormData) => {
-    onSubmit(data);
+    try {
+      setCalculatingPrice(true);
+      const calculation = await businessAPI.calculatePrice(totalWeight);
+      
+      let finalPrice = calculation.price;
+      
+      // Apply priority multiplier to the base weight-based price
+      const priority = watchedValues.priority;
+      
+      const priorityMultiplier = {
+        normal: 1.0,
+        high: 1.2,
+        urgent: 1.5,
+      }[priority] || 1.0;
+      
+      finalPrice = finalPrice * priorityMultiplier;
+      
+      setEstimatedCost(Math.round(finalPrice));
+      setPriceCalculation({
+        ...calculation,
+        price: Math.round(finalPrice)
+      });
+    } catch (error) {
+      console.error('Failed to calculate price:', error);
+      // Fallback to basic calculation
+      const priority = watchedValues.priority;
+      const itemCount = items.length;
+      
+      let baseCost = 35;
+      
+      const priorityMultiplier = {
+        normal: 1.0,
+        high: 1.2,
+        urgent: 1.5,
+      }[priority] || 1.0;
+      
+      const itemMultiplier = 1 + (itemCount - 1) * 0.1;
+      
+      const total = baseCost * priorityMultiplier * itemMultiplier;
+      setEstimatedCost(Math.round(total));
+      setPriceCalculation(null);
+    } finally {
+      setCalculatingPrice(false);
+    }
+  };
+
+  // Recalculate price when relevant fields change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      calculatePriceFromWeight();
+    }, 500); // Debounce the calculation
+    
+    return () => clearTimeout(timeoutId);
+  }, [watchedValues.items, watchedValues.priority]);
+
+  const handleFormSubmit = async (data: DeliveryRequestFormData) => {
+    try {
+      // Add calculated pricing to the form data
+      const submissionData = {
+        ...data,
+        estimatedCost,
+        priceCalculation,
+        totalWeight: calculateTotalWeight(data.items || []),
+        submittedAt: new Date().toISOString()
+      };
+      
+      await onSubmit(submissionData);
+    } catch (error) {
+      console.error('Form submission error:', error);
+    }
   };
 
   const nextStep = () => {
@@ -247,7 +369,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
   const renderStepIndicator = () => (
     <div className="mb-8">
       <div className="flex items-center justify-between">
-        {[1, 2, 3, 4].map((step) => (
+        {[1, 2, 3].map((step) => (
           <div key={step} className="flex items-center">
             <div
               className={clsx(
@@ -259,7 +381,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
             >
               {step}
             </div>
-            {step < totalSteps && (
+            {step < 3 && (
               <div
                 className={clsx(
                   'w-16 h-1 mx-2',
@@ -272,100 +394,20 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
       </div>
       <div className="flex justify-between mt-2 text-sm">
         <span className={currentStep >= 1 ? 'text-primary font-medium' : 'text-gray-500'}>
-          Service & Priority
-        </span>
-        <span className={currentStep >= 2 ? 'text-primary font-medium' : 'text-gray-500'}>
           Pickup & Delivery
         </span>
-        <span className={currentStep >= 3 ? 'text-primary font-medium' : 'text-gray-500'}>
+        <span className={currentStep >= 2 ? 'text-primary font-medium' : 'text-gray-500'}>
           Items & Details
         </span>
-        <span className={currentStep >= 4 ? 'text-primary font-medium' : 'text-gray-500'}>
+        <span className={currentStep >= 3 ? 'text-primary font-medium' : 'text-gray-500'}>
           Schedule & Review
         </span>
       </div>
     </div>
   );
 
+
   const renderStep1 = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Service Type
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {serviceTypes.map((service) => (
-            <label
-              key={service.value}
-              className={clsx(
-                'relative flex cursor-pointer rounded-lg border p-4 focus:outline-none',
-                watchedValues.serviceType === service.value
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-300 bg-white hover:border-gray-400'
-              )}
-            >
-              <input
-                {...register('serviceType')}
-                type="radio"
-                value={service.value}
-                className="sr-only"
-              />
-              <div className="flex-1">
-                <div className="flex items-center">
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-900">{service.label}</p>
-                    <p className="text-gray-500">{service.description}</p>
-                  </div>
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-        {errors.serviceType && (
-          <p className="mt-1 text-sm text-red-600">{errors.serviceType.message}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Priority Level
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {priorityOptions.map((priority) => (
-            <label
-              key={priority.value}
-              className={clsx(
-                'relative flex cursor-pointer rounded-lg border p-4 focus:outline-none',
-                watchedValues.priority === priority.value
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-300 bg-white hover:border-gray-400'
-              )}
-            >
-              <input
-                {...register('priority')}
-                type="radio"
-                value={priority.value}
-                className="sr-only"
-              />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{priority.label}</p>
-                    <p className="text-sm text-gray-500">{priority.description}</p>
-                  </div>
-                  <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', priority.color)}>
-                    {priority.label}
-                  </span>
-                </div>
-              </div>
-            </label>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderStep2 = () => (
     <div className="space-y-8">
       {/* Pickup Details */}
       <div className="bg-green-50 rounded-lg p-6">
@@ -517,8 +559,9 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     </div>
   );
 
-  const renderStep3 = () => (
+  const renderStep2 = () => (
     <div className="space-y-6">
+
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium text-gray-900">Items to Deliver</h3>
         <button
@@ -530,6 +573,68 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
           Add Item
         </button>
       </div>
+
+      {/* Weight Summary */}
+      {watchedValues.items && watchedValues.items.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium text-blue-900">Total Weight & Price</h4>
+              <p className="text-2xl font-bold text-blue-600">
+                {formatWeight(calculateTotalWeight(watchedValues.items))}
+              </p>
+              {/* Show individual item breakdown */}
+              <div className="mt-2 space-y-1">
+                {watchedValues.items.map((item, idx) => {
+                  const itemWeight = (item.weight || 0) * (item.quantity || 1);
+                  const itemPrice = companyPricing && itemWeight > 0 ? calculatePriceForWeight(itemWeight) : 0;
+                  
+                  if (itemWeight > 0) {
+                    return (
+                      <div key={idx} className="text-xs text-blue-700 flex justify-between">
+                        <span>Item {idx + 1}: {formatWeight(itemWeight)}</span>
+                        <span>{itemPrice > 0 ? formatPrice(itemPrice) : '...'}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+            {loadingPricing && (
+              <div className="flex items-center text-blue-600">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2" />
+                Loading pricing...
+              </div>
+            )}
+            {companyPricing && calculateTotalWeight(watchedValues.items) > 0 && (
+              <div className="text-right">
+                <p className="text-sm text-blue-700">Total Estimated Price</p>
+                <p className="text-xl font-bold text-blue-600">
+                  {(() => {
+                    const totalWeight = calculateTotalWeight(watchedValues.items);
+                    const totalPrice = totalWeight > 0 ? calculatePriceForWeight(totalWeight) : 0;
+                    return formatPrice(totalPrice);
+                  })()}
+                </p>
+                <p className="text-xs text-blue-600">
+                  Priority: {watchedValues.priority} ({
+                    { normal: '1.0x', high: '1.2x', urgent: '1.5x' }[watchedValues.priority]
+                  })
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  Using {companyPricing.isCustom ? 'custom' : 'default'} pricing
+                </p>
+              </div>
+            )}
+            {!companyPricing && calculateTotalWeight(watchedValues.items || []) > 0 && (
+              <div className="text-right text-sm text-gray-500">
+                <p>Loading pricing...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {fields.map((field, index) => (
@@ -578,15 +683,59 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Weight (kg) - Optional
+                  Weight (kg) <span className="text-red-500">*</span>
                 </label>
-                <input
-                  {...register(`items.${index}.weight`, { valueAsNumber: true })}
-                  type="number"
-                  step="0.1"
-                  className="form-input"
-                  placeholder="0.5"
-                />
+                <div className="relative">
+                  <input
+                    {...register(`items.${index}.weight`, { 
+                      valueAsNumber: true,
+                      required: 'Weight is required for price calculation'
+                    })}
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    className="form-input pr-20"
+                    placeholder="0.5"
+                  />
+                  {/* Real-time price calculation for this item */}
+                  {watchedValues.items?.[index]?.weight > 0 && (
+                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                      <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded">
+                        {(() => {
+                          const item = watchedValues.items?.[index];
+                          if (!item) return '';
+                          const itemWeight = (item.weight || 0) * (item.quantity || 1);
+                          if (itemWeight > 0 && companyPricing) {
+                            const itemPrice = calculatePriceForWeight(itemWeight);
+                            return itemPrice > 0 ? `${formatPrice(itemPrice)}` : '...';
+                          }
+                          return loadingPricing ? '...' : '';
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {errors.items?.[index]?.weight && (
+                  <p className="mt-1 text-sm text-red-600">{errors.items[index]?.weight?.message}</p>
+                )}
+                {/* Show individual item calculation */}
+                {watchedValues.items?.[index]?.weight && watchedValues.items[index]?.weight > 0 && companyPricing && (
+                  <p className="mt-1 text-xs text-gray-600">
+                    {(() => {
+                      const item = watchedValues.items?.[index];
+                      if (!item) return '';
+                      const itemWeight = (item.weight || 0) * (item.quantity || 1);
+                      const quantity = item.quantity || 1;
+                      const singleWeight = item.weight || 0;
+                      
+                      if (quantity > 1) {
+                        return `${quantity} × ${formatWeight(singleWeight)} = ${formatWeight(itemWeight)} → Priority: ${watchedValues.priority}`;
+                      } else {
+                        return `${formatWeight(itemWeight)} → Priority: ${watchedValues.priority}`;
+                      }
+                    })()}
+                  </p>
+                )}
               </div>
               
               <div>
@@ -657,7 +806,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     </div>
   );
 
-  const renderStep4 = () => (
+  const renderStep3 = () => (
     <div className="space-y-6">
       {/* Schedule */}
       <div className="bg-blue-50 rounded-lg p-6">
@@ -744,12 +893,22 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-3xl font-bold text-gray-900">AED {estimatedCost}</p>
-              <p className="text-sm text-gray-600">Final cost may vary based on actual weight and distance</p>
+              <p className="text-3xl font-bold text-gray-900">{formatPrice(estimatedCost)}</p>
+              <p className="text-sm text-gray-600">
+                {priceCalculation ? 
+                  `Based on ${formatWeight(calculateTotalWeight(watchedValues.items || []))} total weight` :
+                  'Estimated pricing - add item weights for accurate calculation'
+                }
+              </p>
+              {priceCalculation?.breakdown && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {priceCalculation.breakdown.calculation}
+                </p>
+              )}
             </div>
             <div className="text-right text-sm text-gray-600">
-              <p>Service: {serviceTypes.find(s => s.value === watchedValues.serviceType)?.label}</p>
               <p>Priority: {watchedValues.priority}</p>
+              <p>Weight: {formatWeight(calculateTotalWeight(watchedValues.items || []))}</p>
               <p>Items: {watchedValues.items?.length || 0}</p>
             </div>
           </div>
@@ -760,7 +919,6 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
       <div className="bg-gray-50 rounded-lg p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Request Summary</h3>
         <div className="space-y-2 text-sm">
-          <p><span className="font-medium">Service:</span> {serviceTypes.find(s => s.value === watchedValues.serviceType)?.label}</p>
           <p><span className="font-medium">Priority:</span> {watchedValues.priority}</p>
           <p><span className="font-medium">Items:</span> {watchedValues.items?.length || 0} item(s)</p>
           <p><span className="font-medium">Pickup:</span> {watchedValues.pickupDetails?.address}</p>
@@ -779,7 +937,6 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}
-        {currentStep === 4 && renderStep4()}
         
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
           <div className="flex space-x-3">
