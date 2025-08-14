@@ -706,7 +706,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
                     placeholder="0.5"
                   />
                   {/* Real-time price calculation for this item */}
-                  {watchedValues.items?.[index]?.weight && watchedValues.items[index].weight > 0 && (
+                  {watchedValues.items?.[index]?.weight && (watchedValues.items?.[index]?.weight ?? 0) > 0 && (
                     <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                       <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded">
                         {(() => {
@@ -727,7 +727,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
                   <p className="mt-1 text-sm text-red-600">{errors.items[index]?.weight?.message}</p>
                 )}
                 {/* Show individual item calculation */}
-                {watchedValues.items?.[index]?.weight && watchedValues.items[index]?.weight > 0 && companyPricing && (
+                {watchedValues.items?.[index]?.weight && (watchedValues.items?.[index]?.weight ?? 0) > 0 && companyPricing && (
                   <p className="mt-1 text-xs text-gray-600">
                     {(() => {
                       const item = watchedValues.items?.[index];

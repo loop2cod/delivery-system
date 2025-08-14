@@ -24,13 +24,21 @@ import {
 import { clsx } from 'clsx';
 import { businessAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface DeliveryRequest {
   id: string;
   requestNumber: string;
   internalReference?: string;
   priority: 'normal' | 'high' | 'urgent';
-  status: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  status: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'CANCELLED';
   pickupAddress: string;
   deliveryAddress: string;
   pickupDate: string;
@@ -53,7 +61,6 @@ const statusColors = {
   ASSIGNED: 'bg-indigo-100 text-indigo-800',
   PICKED_UP: 'bg-yellow-100 text-yellow-800',
   IN_TRANSIT: 'bg-purple-100 text-purple-800',
-  DELIVERED: 'bg-green-100 text-green-800',
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
@@ -67,12 +74,14 @@ interface RequestTableProps {
   onViewRequest: (request: DeliveryRequest) => void;
   onDuplicateRequest: (request: DeliveryRequest) => void;
   onTrackRequest: (request: DeliveryRequest) => void;
+  onStatsUpdate?: () => void;
 }
 
 export function RequestTable({
   onViewRequest,
   onDuplicateRequest,
   onTrackRequest,
+  onStatsUpdate,
 }: RequestTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -81,7 +90,7 @@ export function RequestTable({
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 20,
+    limit: 10,
     total: 0,
     pages: 0
   });
@@ -91,24 +100,40 @@ export function RequestTable({
   // Load requests data
   useEffect(() => {
     loadRequests();
-  }, [pagination.page, pagination.limit, statusFilter, globalFilter]);
+  }, [pagination.page, pagination.limit, statusFilter, priorityFilter, globalFilter]);
 
   const loadRequests = async () => {
     try {
       setLoading(true);
-      const response = await businessAPI.getRequests({
+      const params: any = {
         page: pagination.page,
         limit: pagination.limit,
-        status: statusFilter || undefined,
-        search: globalFilter || undefined
-      });
+      };
       
-      setRequests(response.requests);
+      // Always exclude DELIVERED requests from Request History
+      if (statusFilter && statusFilter !== 'DELIVERED') {
+        params.status = statusFilter;
+      }
+      if (globalFilter) params.search = globalFilter;
+      
+      const response = await businessAPI.getRequests(params);
+      
+      // Filter out DELIVERED requests on client side as well
+      const filteredRequests = response.requests.filter(
+        (request: any) => request.status !== 'DELIVERED'
+      );
+      
+      setRequests(filteredRequests);
       setPagination(prev => ({
         ...prev,
         total: response.pagination.total,
         pages: response.pagination.pages
       }));
+      
+      // Update parent stats when data changes
+      if (onStatsUpdate) {
+        onStatsUpdate();
+      }
     } catch (error) {
       console.error('Failed to load requests:', error);
       toast.error('Failed to load requests');
@@ -119,12 +144,24 @@ export function RequestTable({
 
   const handleStatusFilterChange = (status: string) => {
     setStatusFilter(status);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handlePriorityFilterChange = (priority: string) => {
+    setPriorityFilter(priority);
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handleSearchChange = (search: string) => {
     setGlobalFilter(search);
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const clearAllFilters = () => {
+    setStatusFilter('');
+    setPriorityFilter('');
+    setGlobalFilter('');
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const columns = useMemo<ColumnDef<DeliveryRequest>[]>(
@@ -191,7 +228,7 @@ export function RequestTable({
         accessorKey: 'pickupAddress',
         header: 'Route',
         cell: ({ row }) => (
-          <div className="max-w-xs">
+          <div className="min-w-[200px] max-w-xs">
             <div className="text-sm text-gray-900 truncate flex items-start">
               <MapPinIcon className="w-4 h-4 text-green-500 mr-1 mt-0.5 flex-shrink-0" />
               <span className="truncate">{row.original.pickupAddress}</span>
@@ -260,7 +297,7 @@ export function RequestTable({
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => (
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 min-w-[120px]">
             <button
               onClick={() => onViewRequest(row.original)}
               className="p-1 text-gray-400 hover:text-gray-600"
@@ -333,13 +370,12 @@ export function RequestTable({
             <option value="ASSIGNED">Assigned</option>
             <option value="PICKED_UP">Picked Up</option>
             <option value="IN_TRANSIT">In Transit</option>
-            <option value="DELIVERED">Delivered</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
 
           <select
             value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value)}
+            onChange={(e) => handlePriorityFilterChange(e.target.value)}
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
           >
             <option value="">All Priority</option>
@@ -347,6 +383,15 @@ export function RequestTable({
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </select>
+
+          {(statusFilter || priorityFilter || globalFilter) && (
+            <button
+              onClick={clearAllFilters}
+              className="px-3 py-2 text-sm text-red-600 hover:text-red-800 border border-red-300 rounded-md hover:bg-red-50"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
 
         <div className="text-sm text-gray-500">
@@ -354,23 +399,51 @@ export function RequestTable({
         </div>
       </div>
 
-      {/* Request Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
-        {Object.entries(statusColors).map(([status, colorClass]) => {
-          const count = requests.filter(r => r.status === status).length;
-          return (
-            <div key={status} className="bg-white rounded-lg p-4 border border-gray-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600 capitalize">
-                  {status.replace('_', ' ')}
-                </span>
-                <span className={clsx('px-2 py-1 rounded-full text-xs font-medium', colorClass)}>
+      {/* Quick Filter Buttons */}
+      <div className="bg-white shadow-sm rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-gray-900">Quick Filters</h3>
+          <div className="text-sm text-gray-500">
+            {loading ? 'Loading...' : `${pagination.total} total requests`}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => handleStatusFilterChange('')}
+            className={clsx(
+              'px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              !statusFilter
+                ? 'bg-primary text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            )}
+          >
+            All Requests
+          </button>
+          {Object.entries(statusColors).map(([status, colorClass]) => {
+            const count = requests.filter(r => r.status === status).length;
+            const isActive = statusFilter === status;
+            return (
+              <button
+                key={status}
+                onClick={() => handleStatusFilterChange(status)}
+                className={clsx(
+                  'px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2',
+                  isActive
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                )}
+              >
+                <span>{status.replace('_', ' ')}</span>
+                <span className={clsx(
+                  'px-2 py-0.5 rounded-full text-xs',
+                  isActive ? 'bg-white/20 text-white' : colorClass
+                )}>
                   {count}
                 </span>
-              </div>
-            </div>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Table */}
@@ -382,55 +455,51 @@ export function RequestTable({
           </div>
         )}
         {!loading && (
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {header.isPlaceholder ? null : (
-                      <div
-                        className={clsx(
-                          'flex items-center space-x-1',
-                          header.column.getCanSort() && 'cursor-pointer select-none'
+          <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
+            <Table>
+              <TableHeader className="sticky top-0 bg-white z-10">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <TableHead key={header.id} className="text-left whitespace-nowrap">
+                        {header.isPlaceholder ? null : (
+                          <div
+                            className={clsx(
+                              'flex items-center space-x-1',
+                              header.column.getCanSort() && 'cursor-pointer select-none'
+                            )}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            <span>
+                              {flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
+                              )}
+                            </span>
+                            {{
+                              asc: <ChevronUpIcon className="h-4 w-4" />,
+                              desc: <ChevronDownIcon className="h-4 w-4" />,
+                            }[header.column.getIsSorted() as string] ?? null}
+                          </div>
                         )}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        <span>
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                        </span>
-                        {{
-                          asc: <ChevronUpIcon className="h-4 w-4" />,
-                          desc: <ChevronDownIcon className="h-4 w-4" />,
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    )}
-                  </th>
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="hover:bg-gray-50">
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="whitespace-nowrap">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </TableBody>
+            </Table>
+          </div>
         )}
         
         {!loading && requests.length === 0 && (
@@ -446,55 +515,96 @@ export function RequestTable({
         )}
       </div>
 
-      {/* Pagination */}
-      {!loading && pagination.pages > 1 && (
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: 1 }))}
-            disabled={pagination.page === 1}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            First
-          </button>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-            disabled={pagination.page === 1}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Previous
-          </button>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
-            disabled={pagination.page === pagination.pages}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Next
-          </button>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
-            disabled={pagination.page === pagination.pages}
-            className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Last
-          </button>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-700">
-            Page {pagination.page} of {pagination.pages}
-          </span>
-          <select
-            value={pagination.limit}
-            onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
-            className="border border-gray-300 rounded px-2 py-1 text-sm"
-          >
-            {[10, 20, 30, 40, 50].map((limit) => (
-              <option key={limit} value={limit}>
-                Show {limit}
-              </option>
-            ))}
-          </select>
+      {/* Enhanced Pagination */}
+      {!loading && (
+      <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <p className="text-sm text-gray-700">
+              Showing{' '}
+              <span className="font-medium">
+                {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
+              </span>{' '}
+              to{' '}
+              <span className="font-medium">
+                {Math.min(pagination.page * pagination.limit, pagination.total)}
+              </span>{' '}
+              of{' '}
+              <span className="font-medium">{pagination.total}</span>{' '}
+              results
+            </p>
+          </div>
+          
+          {pagination.pages > 1 && (
+            <div className="flex items-center space-x-2">
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: 1 }))}
+                  disabled={pagination.page === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page === 1}
+                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                {(() => {
+                  const pages = [];
+                  const startPage = Math.max(1, pagination.page - 2);
+                  const endPage = Math.min(pagination.pages, pagination.page + 2);
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => setPagination(prev => ({ ...prev, page: i }))}
+                        className={clsx(
+                          'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
+                          i === pagination.page
+                            ? 'z-10 bg-primary border-primary text-white'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        )}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  return pages;
+                })()}
+                
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                  disabled={pagination.page === pagination.pages}
+                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
+                  disabled={pagination.page === pagination.pages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Last
+                </button>
+              </nav>
+              
+              <select
+                value={pagination.limit}
+                onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
+                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+              >
+                <option value={10}>10 per page</option>
+                <option value={20}>20 per page</option>
+                <option value={50}>50 per page</option>
+              </select>
+            </div>
+          )}
         </div>
       </div>
       )}

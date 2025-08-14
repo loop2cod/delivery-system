@@ -54,6 +54,7 @@
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -67,6 +68,31 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: theme(colors.gray.400);
+}
+
+/* Custom table scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: theme(colors.gray.50);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: theme(colors.gray.300);
+  border-radius: 4px;
+  border: 2px solid theme(colors.gray.50);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: theme(colors.gray.400);
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner {
+  background: theme(colors.gray.50);
 }
 
 /* Chart styles */
