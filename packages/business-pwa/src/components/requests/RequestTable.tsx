@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   flexRender,
   getCoreRowModel,
@@ -22,126 +22,39 @@ import {
   CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
+import { businessAPI } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 interface DeliveryRequest {
   id: string;
+  requestNumber: string;
   internalReference?: string;
-  serviceType: string;
   priority: 'normal' | 'high' | 'urgent';
-  status: 'draft' | 'submitted' | 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'cancelled';
+  status: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
   pickupAddress: string;
   deliveryAddress: string;
   pickupDate: string;
   deliveryDate: string;
-  estimatedCost: string;
-  actualCost?: string;
-  itemCount: number;
+  estimatedCost: number;
+  actualCost?: number;
+  totalWeight: number;
+  items: any[];
   createdAt: string;
-  createdBy: string;
+  createdBy?: string;
   assignedDriver?: {
     name: string;
     phone: string;
   };
 }
 
-const mockRequests: DeliveryRequest[] = [
-  {
-    id: 'REQ-2024-001',
-    internalReference: 'TECH-001',
-    serviceType: 'Same-Day Delivery',
-    priority: 'urgent',
-    status: 'in_transit',
-    pickupAddress: 'TechCorp Solutions, Business Bay',
-    deliveryAddress: 'Client Office, DIFC',
-    pickupDate: '2024-01-15T10:00:00Z',
-    deliveryDate: '2024-01-15T16:00:00Z',
-    estimatedCost: 'AED 45',
-    actualCost: 'AED 45',
-    itemCount: 2,
-    createdAt: '2024-01-15T08:30:00Z',
-    createdBy: 'Sarah Johnson',
-    assignedDriver: {
-      name: 'Omar Hassan',
-      phone: '+971-50-123-4567',
-    },
-  },
-  {
-    id: 'REQ-2024-002',
-    internalReference: 'TECH-002',
-    serviceType: 'Document Delivery',
-    priority: 'high',
-    status: 'delivered',
-    pickupAddress: 'TechCorp Solutions, Business Bay',
-    deliveryAddress: 'Government Office, Abu Dhabi',
-    pickupDate: '2024-01-14T09:00:00Z',
-    deliveryDate: '2024-01-14T15:00:00Z',
-    estimatedCost: 'AED 120',
-    actualCost: 'AED 115',
-    itemCount: 1,
-    createdAt: '2024-01-14T07:15:00Z',
-    createdBy: 'Mike Chen',
-    assignedDriver: {
-      name: 'Ahmed Ali',
-      phone: '+971-56-789-0123',
-    },
-  },
-  {
-    id: 'REQ-2024-003',
-    serviceType: 'Express Delivery',
-    priority: 'normal',
-    status: 'submitted',
-    pickupAddress: 'TechCorp Solutions, Business Bay',
-    deliveryAddress: 'Partner Company, Sharjah',
-    pickupDate: '2024-01-16T11:00:00Z',
-    deliveryDate: '2024-01-16T17:00:00Z',
-    estimatedCost: 'AED 85',
-    itemCount: 3,
-    createdAt: '2024-01-15T14:20:00Z',
-    createdBy: 'Sarah Johnson',
-  },
-  {
-    id: 'REQ-2024-004',
-    internalReference: 'TECH-004',
-    serviceType: 'Fragile Items',
-    priority: 'high',
-    status: 'assigned',
-    pickupAddress: 'TechCorp Solutions, Business Bay',
-    deliveryAddress: 'Exhibition Center, Dubai',
-    pickupDate: '2024-01-17T10:00:00Z',
-    deliveryDate: '2024-01-17T14:00:00Z',
-    estimatedCost: 'AED 95',
-    itemCount: 1,
-    createdAt: '2024-01-15T16:45:00Z',
-    createdBy: 'David Wilson',
-    assignedDriver: {
-      name: 'Mohammed Al Rashid',
-      phone: '+971-52-456-7890',
-    },
-  },
-  {
-    id: 'REQ-2024-005',
-    serviceType: 'Same-Day Delivery',
-    priority: 'normal',
-    status: 'draft',
-    pickupAddress: 'TechCorp Solutions, Business Bay',
-    deliveryAddress: 'Client Office, Marina',
-    pickupDate: '2024-01-18T09:00:00Z',
-    deliveryDate: '2024-01-18T15:00:00Z',
-    estimatedCost: 'AED 55',
-    itemCount: 2,
-    createdAt: '2024-01-15T17:30:00Z',
-    createdBy: 'Sarah Johnson',
-  },
-];
 
 const statusColors = {
-  draft: 'bg-gray-100 text-gray-800',
-  submitted: 'bg-blue-100 text-blue-800',
-  assigned: 'bg-indigo-100 text-indigo-800',
-  picked_up: 'bg-yellow-100 text-yellow-800',
-  in_transit: 'bg-purple-100 text-purple-800',
-  delivered: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
+  PENDING: 'bg-blue-100 text-blue-800',
+  ASSIGNED: 'bg-indigo-100 text-indigo-800',
+  PICKED_UP: 'bg-yellow-100 text-yellow-800',
+  IN_TRANSIT: 'bg-purple-100 text-purple-800',
+  DELIVERED: 'bg-green-100 text-green-800',
+  CANCELLED: 'bg-red-100 text-red-800',
 };
 
 const priorityColors = {
@@ -164,16 +77,65 @@ export function RequestTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [requests, setRequests] = useState<DeliveryRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    pages: 0
+  });
+  const [statusFilter, setStatusFilter] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+
+  // Load requests data
+  useEffect(() => {
+    loadRequests();
+  }, [pagination.page, pagination.limit, statusFilter, globalFilter]);
+
+  const loadRequests = async () => {
+    try {
+      setLoading(true);
+      const response = await businessAPI.getRequests({
+        page: pagination.page,
+        limit: pagination.limit,
+        status: statusFilter || undefined,
+        search: globalFilter || undefined
+      });
+      
+      setRequests(response.requests);
+      setPagination(prev => ({
+        ...prev,
+        total: response.pagination.total,
+        pages: response.pagination.pages
+      }));
+    } catch (error) {
+      console.error('Failed to load requests:', error);
+      toast.error('Failed to load requests');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusFilterChange = (status: string) => {
+    setStatusFilter(status);
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+  };
+
+  const handleSearchChange = (search: string) => {
+    setGlobalFilter(search);
+    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+  };
 
   const columns = useMemo<ColumnDef<DeliveryRequest>[]>(
     () => [
       {
-        accessorKey: 'id',
+        accessorKey: 'requestNumber',
         header: 'Request ID',
         cell: ({ row }) => (
           <div>
             <span className="font-mono text-sm text-gray-900">
-              {row.getValue('id')}
+              {row.getValue('requestNumber')}
             </span>
             {row.original.internalReference && (
               <div className="text-xs text-gray-500">
@@ -184,15 +146,15 @@ export function RequestTable({
         ),
       },
       {
-        accessorKey: 'serviceType',
-        header: 'Service',
+        accessorKey: 'totalWeight',
+        header: 'Items & Weight',
         cell: ({ row }) => (
           <div>
             <div className="text-sm text-gray-900">
-              {row.getValue('serviceType')}
+              {row.original.items?.length || 0} item{(row.original.items?.length || 0) !== 1 ? 's' : ''}
             </div>
             <div className="text-xs text-gray-500">
-              {row.original.itemCount} item{row.original.itemCount !== 1 ? 's' : ''}
+              {row.original.totalWeight?.toFixed(1) || '0'} kg
             </div>
           </div>
         ),
@@ -267,26 +229,28 @@ export function RequestTable({
         cell: ({ row }) => (
           <div className="text-sm">
             <div className="font-medium text-gray-900">
-              {row.original.actualCost || row.getValue('estimatedCost')}
+              AED {row.original.actualCost || row.getValue('estimatedCost')}
             </div>
             {row.original.actualCost && row.original.actualCost !== row.original.estimatedCost && (
               <div className="text-xs text-gray-500">
-                Est: {row.original.estimatedCost}
+                Est: AED {row.original.estimatedCost}
               </div>
             )}
           </div>
         ),
       },
       {
-        accessorKey: 'createdBy',
-        header: 'Created By',
+        accessorKey: 'createdAt',
+        header: 'Created',
         cell: ({ row }) => {
           const createdDate = new Date(row.original.createdAt);
           return (
             <div className="text-sm">
-              <div className="text-gray-900">{row.getValue('createdBy')}</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-gray-900">
                 {createdDate.toLocaleDateString()}
+              </div>
+              <div className="text-xs text-gray-500">
+                {createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           );
@@ -311,7 +275,7 @@ export function RequestTable({
             >
               <DocumentDuplicateIcon className="h-4 w-4" />
             </button>
-            {['submitted', 'assigned', 'picked_up', 'in_transit'].includes(row.original.status) && (
+            {['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].includes(row.original.status) && (
               <button
                 onClick={() => onTrackRequest(row.original)}
                 className="p-1 text-blue-400 hover:text-blue-600"
@@ -328,7 +292,7 @@ export function RequestTable({
   );
 
   const table = useReactTable({
-    data: mockRequests,
+    data: requests,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -353,34 +317,29 @@ export function RequestTable({
             <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               value={globalFilter ?? ''}
-              onChange={(e) => setGlobalFilter(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary sm:text-sm"
               placeholder="Search requests..."
             />
           </div>
           
           <select
-            value={(table.getColumn('status')?.getFilterValue() as string) ?? ''}
-            onChange={(e) =>
-              table.getColumn('status')?.setFilterValue(e.target.value)
-            }
+            value={statusFilter}
+            onChange={(e) => handleStatusFilterChange(e.target.value)}
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
           >
             <option value="">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="submitted">Submitted</option>
-            <option value="assigned">Assigned</option>
-            <option value="picked_up">Picked Up</option>
-            <option value="in_transit">In Transit</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="PENDING">Pending</option>
+            <option value="ASSIGNED">Assigned</option>
+            <option value="PICKED_UP">Picked Up</option>
+            <option value="IN_TRANSIT">In Transit</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
 
           <select
-            value={(table.getColumn('priority')?.getFilterValue() as string) ?? ''}
-            onChange={(e) =>
-              table.getColumn('priority')?.setFilterValue(e.target.value)
-            }
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
             className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
           >
             <option value="">All Priority</option>
@@ -391,15 +350,14 @@ export function RequestTable({
         </div>
 
         <div className="text-sm text-gray-500">
-          {table.getFilteredRowModel().rows.length} of{' '}
-          {table.getCoreRowModel().rows.length} requests
+          {loading ? 'Loading...' : `${pagination.total} requests`}
         </div>
       </div>
 
       {/* Request Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
         {Object.entries(statusColors).map(([status, colorClass]) => {
-          const count = mockRequests.filter(r => r.status === status).length;
+          const count = requests.filter(r => r.status === status).length;
           return (
             <div key={status} className="bg-white rounded-lg p-4 border border-gray-200">
               <div className="flex items-center justify-between">
@@ -417,6 +375,13 @@ export function RequestTable({
 
       {/* Table */}
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="ml-2 text-gray-600">Loading requests...</span>
+          </div>
+        )}
+        {!loading && (
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             {table.getHeaderGroups().map((headerGroup) => (
@@ -466,35 +431,49 @@ export function RequestTable({
             ))}
           </tbody>
         </table>
+        )}
+        
+        {!loading && requests.length === 0 && (
+          <div className="text-center py-8">
+            <div className="text-gray-500">
+              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 className="mt-2 text-sm font-medium text-gray-900">No requests found</h3>
+              <p className="mt-1 text-sm text-gray-500">Create your first delivery request to get started.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pagination */}
+      {!loading && pagination.pages > 1 && (
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setPagination(prev => ({ ...prev, page: 1 }))}
+            disabled={pagination.page === 1}
             className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             First
           </button>
           <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+            disabled={pagination.page === 1}
             className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Previous
           </button>
           <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+            disabled={pagination.page === pagination.pages}
             className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Next
           </button>
           <button
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
+            onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
+            disabled={pagination.page === pagination.pages}
             className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Last
@@ -503,24 +482,22 @@ export function RequestTable({
         
         <div className="flex items-center space-x-2">
           <span className="text-sm text-gray-700">
-            Page {table.getState().pagination.pageIndex + 1} of{' '}
-            {table.getPageCount()}
+            Page {pagination.page} of {pagination.pages}
           </span>
           <select
-            value={table.getState().pagination.pageSize}
-            onChange={(e) => {
-              table.setPageSize(Number(e.target.value));
-            }}
+            value={pagination.limit}
+            onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
             className="border border-gray-300 rounded px-2 py-1 text-sm"
           >
-            {[10, 20, 30, 40, 50].map((pageSize) => (
-              <option key={pageSize} value={pageSize}>
-                Show {pageSize}
+            {[10, 20, 30, 40, 50].map((limit) => (
+              <option key={limit} value={limit}>
+                Show {limit}
               </option>
             ))}
           </select>
         </div>
       </div>
+      )}
     </div>
   );
 }

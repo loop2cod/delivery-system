@@ -73,11 +73,11 @@ export async function businessRoutes(fastify: FastifyInstance) {
               deliveryTime: { type: 'string' }
             }
           },
-          specialRequirements: { type: 'string' },
-          internalReference: { type: 'string' },
-          estimatedCost: { type: 'number' },
+          specialRequirements: { type: ['string', 'null'] },
+          internalReference: { type: ['string', 'null'] },
+          estimatedCost: { type: ['number', 'null'] },
           totalWeight: { type: 'number' },
-          priceCalculation: { type: 'object' }
+          priceCalculation: { type: ['object', 'null'] }
         }
       }
     }
@@ -535,8 +535,8 @@ export async function businessRoutes(fastify: FastifyInstance) {
         pricingName: pricing.name,
         isCustomPricing,
         breakdown: {
-          tier: applicableTier,
-          calculation
+          calculation,
+          tiers: usedTiers
         }
       };
     } catch (error) {

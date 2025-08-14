@@ -335,8 +335,16 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
       // Add calculated pricing to the form data
       const submissionData = {
         ...data,
-        estimatedCost,
-        priceCalculation,
+        estimatedCost: estimatedCost || 0,
+        priceCalculation: priceCalculation || {
+          weight: calculateTotalWeight(data.items || []),
+          price: estimatedCost || 0,
+          currency: 'AED',
+          breakdown: {
+            calculation: 'Price not calculated',
+            tiers: []
+          }
+        },
         totalWeight: calculateTotalWeight(data.items || []),
         submittedAt: new Date().toISOString()
       };
@@ -698,7 +706,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
                     placeholder="0.5"
                   />
                   {/* Real-time price calculation for this item */}
-                  {watchedValues.items?.[index]?.weight > 0 && (
+                  {watchedValues.items?.[index]?.weight && watchedValues.items[index].weight > 0 && (
                     <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                       <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded">
                         {(() => {
