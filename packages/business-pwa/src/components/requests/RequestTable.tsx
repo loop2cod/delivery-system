@@ -47,6 +47,7 @@ interface DeliveryRequest {
   actualCost?: number;
   totalWeight: number;
   items: any[];
+  totalCODAmount?: number;
   createdAt: string;
   createdBy?: string;
   assignedDriver?: {
@@ -109,27 +110,27 @@ export function RequestTable({
         page: pagination.page,
         limit: pagination.limit,
       };
-      
+
       // Always exclude DELIVERED requests from Request History
       if (statusFilter && statusFilter !== 'DELIVERED') {
         params.status = statusFilter;
       }
       if (globalFilter) params.search = globalFilter;
-      
+
       const response = await businessAPI.getRequests(params);
-      
+
       // Filter out DELIVERED requests on client side as well
       const filteredRequests = response.requests.filter(
         (request: any) => request.status !== 'DELIVERED'
       );
-      
+
       setRequests(filteredRequests);
       setPagination(prev => ({
         ...prev,
         total: response.pagination.total,
         pages: response.pagination.pages
       }));
-      
+
       // Update parent stats when data changes
       if (onStatsUpdate) {
         onStatsUpdate();
@@ -185,16 +186,26 @@ export function RequestTable({
       {
         accessorKey: 'totalWeight',
         header: 'Items & Weight',
-        cell: ({ row }) => (
-          <div>
-            <div className="text-sm text-gray-900">
-              {row.original.items?.length || 0} item{(row.original.items?.length || 0) !== 1 ? 's' : ''}
+        cell: ({ row }) => {
+          const codItems = row.original.items?.filter((item: any) => item.paymentType === 'cod') || [];
+          const totalCOD = codItems.reduce((sum: number, item: any) => sum + (item.codAmount || 0), 0);
+
+          return (
+            <div>
+              <div className="text-sm text-gray-900">
+                {row.original.items?.length || 0} item{(row.original.items?.length || 0) !== 1 ? 's' : ''}
+              </div>
+              <div className="text-xs text-gray-500">
+                {row.original.totalWeight?.toFixed(1) || '0'} kg
+              </div>
+              {codItems.length > 0 && (
+                <div className="text-xs text-orange-600 font-medium">
+                  COD: AED {totalCOD.toFixed(2)}
+                </div>
+              )}
             </div>
-            <div className="text-xs text-gray-500">
-              {row.original.totalWeight?.toFixed(1) || '0'} kg
-            </div>
-          </div>
-        ),
+          );
+        },
       },
       {
         accessorKey: 'priority',
@@ -359,7 +370,7 @@ export function RequestTable({
               placeholder="Search requests..."
             />
           </div>
-          
+
           <select
             value={statusFilter}
             onChange={(e) => handleStatusFilterChange(e.target.value)}
@@ -501,7 +512,7 @@ export function RequestTable({
             </Table>
           </div>
         )}
-        
+
         {!loading && requests.length === 0 && (
           <div className="text-center py-8">
             <div className="text-gray-500">
@@ -517,96 +528,96 @@ export function RequestTable({
 
       {/* Enhanced Pagination */}
       {!loading && (
-      <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <p className="text-sm text-gray-700">
-              Showing{' '}
-              <span className="font-medium">
-                {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
-              </span>{' '}
-              to{' '}
-              <span className="font-medium">
-                {Math.min(pagination.page * pagination.limit, pagination.total)}
-              </span>{' '}
-              of{' '}
-              <span className="font-medium">{pagination.total}</span>{' '}
-              results
-            </p>
-          </div>
-          
-          {pagination.pages > 1 && (
-            <div className="flex items-center space-x-2">
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: 1 }))}
-                  disabled={pagination.page === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  First
-                </button>
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                  disabled={pagination.page === 1}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                
-                {/* Page Numbers */}
-                {(() => {
-                  const pages = [];
-                  const startPage = Math.max(1, pagination.page - 2);
-                  const endPage = Math.min(pagination.pages, pagination.page + 2);
-                  
-                  for (let i = startPage; i <= endPage; i++) {
-                    pages.push(
-                      <button
-                        key={i}
-                        onClick={() => setPagination(prev => ({ ...prev, page: i }))}
-                        className={clsx(
-                          'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
-                          i === pagination.page
-                            ? 'z-10 bg-primary border-primary text-white'
-                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                        )}
-                      >
-                        {i}
-                      </button>
-                    );
-                  }
-                  return pages;
-                })()}
-                
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-                <button
-                  onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
-                  disabled={pagination.page === pagination.pages}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Last
-                </button>
-              </nav>
-              
-              <select
-                value={pagination.limit}
-                onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
-              >
-                <option value={10}>10 per page</option>
-                <option value={20}>20 per page</option>
-                <option value={50}>50 per page</option>
-              </select>
+        <div className="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <p className="text-sm text-gray-700">
+                Showing{' '}
+                <span className="font-medium">
+                  {pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1}
+                </span>{' '}
+                to{' '}
+                <span className="font-medium">
+                  {Math.min(pagination.page * pagination.limit, pagination.total)}
+                </span>{' '}
+                of{' '}
+                <span className="font-medium">{pagination.total}</span>{' '}
+                results
+              </p>
             </div>
-          )}
+
+            {pagination.pages > 1 && (
+              <div className="flex items-center space-x-2">
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: 1 }))}
+                    disabled={pagination.page === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                    disabled={pagination.page === 1}
+                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+
+                  {/* Page Numbers */}
+                  {(() => {
+                    const pages = [];
+                    const startPage = Math.max(1, pagination.page - 2);
+                    const endPage = Math.min(pagination.pages, pagination.page + 2);
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => setPagination(prev => ({ ...prev, page: i }))}
+                          className={clsx(
+                            'relative inline-flex items-center px-4 py-2 border text-sm font-medium',
+                            i === pagination.page
+                              ? 'z-10 bg-primary border-primary text-white'
+                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                          )}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+                    return pages;
+                  })()}
+
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.pages, prev.page + 1) }))}
+                    disabled={pagination.page === pagination.pages}
+                    className="relative inline-flex items-center px-2 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setPagination(prev => ({ ...prev, page: prev.pages }))}
+                    disabled={pagination.page === pagination.pages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Last
+                  </button>
+                </nav>
+
+                <select
+                  value={pagination.limit}
+                  onChange={(e) => setPagination(prev => ({ ...prev, limit: Number(e.target.value), page: 1 }))}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-primary focus:border-primary"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={50}>50 per page</option>
+                </select>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
       )}
     </div>
   );

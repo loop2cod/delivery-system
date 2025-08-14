@@ -40,6 +40,8 @@ const deliveryRequestSchema = z.object({
     dimensions: z.string().optional(),
     value: z.number().optional(),
     fragile: z.boolean().default(false),
+    paymentType: z.enum(['paid', 'cod']).default('paid'),
+    codAmount: z.number().optional(),
   })).min(1, 'At least one item is required'),
   schedule: z.object({
     pickupDate: z.string().min(1, 'Pickup date is required'),
@@ -105,7 +107,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     resolver: zodResolver(deliveryRequestSchema),
     defaultValues: {
       priority: 'normal',
-      items: [{ description: '', quantity: 1, fragile: false }],
+      items: [{ description: '', quantity: 1, fragile: false, paymentType: 'paid', codAmount: 0 }],
       pickupDetails: { contactName: '', phone: '', address: '', instructions: '' },
       deliveryDetails: { contactName: '', phone: '', address: '', instructions: '' },
       schedule: { pickupDate: '', pickupTime: '', deliveryDate: '', deliveryTime: '' },
@@ -574,7 +576,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
         <h3 className="text-lg font-medium text-gray-900">Items to Deliver</h3>
         <button
           type="button"
-          onClick={() => append({ description: '', quantity: 1, fragile: false })}
+          onClick={() => append({ description: '', quantity: 1, fragile: false, paymentType: 'paid', codAmount: 0 })}
           className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-primary bg-primary/10 hover:bg-primary/20"
         >
           <PlusIcon className="w-4 h-4 mr-1" />
@@ -596,11 +598,16 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
                 {watchedValues.items.map((item, idx) => {
                   const itemWeight = (item.weight || 0) * (item.quantity || 1);
                   const itemPrice = companyPricing && itemWeight > 0 ? calculatePriceForWeight(itemWeight) : 0;
+                  const isCOD = item.paymentType === 'cod';
+                  const codAmount = item.codAmount || 0;
                   
                   if (itemWeight > 0) {
                     return (
                       <div key={idx} className="text-xs text-blue-700 flex justify-between">
-                        <span>Item {idx + 1}: {formatWeight(itemWeight)}</span>
+                        <span>
+                          Item {idx + 1}: {formatWeight(itemWeight)}
+                          {isCOD && <span className="ml-1 text-orange-600 font-medium">(COD: {formatPrice(codAmount)})</span>}
+                        </span>
                         <span>{itemPrice > 0 ? formatPrice(itemPrice) : '...'}</span>
                       </div>
                     );
@@ -608,6 +615,31 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
                   return null;
                 })}
               </div>
+              
+              {/* COD Summary */}
+              {(() => {
+                const codItems = watchedValues.items.filter(item => item.paymentType === 'cod');
+                const totalCOD = codItems.reduce((sum, item) => sum + (item.codAmount || 0), 0);
+                
+                if (codItems.length > 0) {
+                  return (
+                    <div className="mt-3 pt-2 border-t border-blue-200">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-orange-700">
+                          Total COD Amount:
+                        </span>
+                        <span className="text-lg font-bold text-orange-600">
+                          {formatPrice(totalCOD)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-orange-600 mt-1">
+                        {codItems.length} item{codItems.length !== 1 ? 's' : ''} require{codItems.length === 1 ? 's' : ''} cash collection
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             {loadingPricing && (
               <div className="flex items-center text-blue-600">
@@ -772,6 +804,50 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
               </div>
             </div>
             
+            {/* Payment Type and COD Amount */}
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <h5 className="text-sm font-medium text-gray-900 mb-3">Payment Information</h5>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Type
+                  </label>
+                  <select
+                    {...register(`items.${index}.paymentType`)}
+                    className="form-input"
+                  >
+                    <option value="paid">Paid</option>
+                    <option value="cod">Cash on Delivery (COD)</option>
+                  </select>
+                </div>
+                
+                {watchedValues.items?.[index]?.paymentType === 'cod' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      COD Amount (AED) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      {...register(`items.${index}.codAmount`, { 
+                        valueAsNumber: true,
+                        required: watchedValues.items?.[index]?.paymentType === 'cod' ? 'COD amount is required' : false
+                      })}
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="form-input"
+                      placeholder="0.00"
+                    />
+                    {errors.items?.[index]?.codAmount && (
+                      <p className="mt-1 text-sm text-red-600">{errors.items[index]?.codAmount?.message}</p>
+                    )}
+                    <p className="mt-1 text-xs text-gray-600">
+                      Amount to be collected from recipient upon delivery
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
             <div className="mt-4">
               <label className="flex items-center">
                 <input
@@ -932,6 +1008,26 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
           <p><span className="font-medium">Pickup:</span> {watchedValues.pickupDetails?.address}</p>
           <p><span className="font-medium">Delivery:</span> {watchedValues.deliveryDetails?.address}</p>
           <p><span className="font-medium">Schedule:</span> {watchedValues.schedule?.pickupDate} at {watchedValues.schedule?.pickupTime}</p>
+          
+          {/* COD Summary */}
+          {(() => {
+            const codItems = watchedValues.items?.filter(item => item.paymentType === 'cod') || [];
+            const totalCOD = codItems.reduce((sum, item) => sum + (item.codAmount || 0), 0);
+            
+            if (codItems.length > 0) {
+              return (
+                <div className="mt-3 pt-2 border-t border-gray-300">
+                  <p className="font-medium text-orange-700">
+                    COD Collection Required: <span className="text-orange-600">{formatPrice(totalCOD)}</span>
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {codItems.length} item{codItems.length !== 1 ? 's' : ''} require{codItems.length === 1 ? 's' : ''} cash collection upon delivery
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </div>

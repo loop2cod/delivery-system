@@ -46,6 +46,8 @@ interface DeliveryRequest {
     dimensions?: string;
     value?: number;
     fragile: boolean;
+    paymentType?: 'paid' | 'cod';
+    codAmount?: number;
   }>;
   totalWeight: number;
   estimatedCost: number;
@@ -373,6 +375,9 @@ export default function RequestDetailPage() {
                       Value
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Special
                     </th>
                   </tr>
@@ -396,6 +401,22 @@ export default function RequestDetailPage() {
                         {item.value ? `AED ${item.value}` : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {item.paymentType === 'cod' ? (
+                          <div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                              COD
+                            </span>
+                            <div className="text-xs text-gray-600 mt-1">
+                              AED {item.codAmount?.toFixed(2) || '0.00'}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Paid
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.fragile && (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                             Fragile
@@ -407,26 +428,58 @@ export default function RequestDetailPage() {
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center">
-                <ScaleIcon className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-sm text-gray-900">
-                  Total Weight: <span className="font-medium">{request.totalWeight} kg</span>
-                </span>
-              </div>
-              <div className="flex items-center">
-                <CurrencyDollarIcon className="h-5 w-5 text-gray-400 mr-2" />
-                <span className="text-sm text-gray-900">
-                  Cost: <span className="font-medium">
-                    AED {request.actualCost || request.estimatedCost}
-                    {request.actualCost && request.actualCost !== request.estimatedCost && (
-                      <span className="text-xs text-gray-500 ml-1">
-                        (Est: AED {request.estimatedCost})
-                      </span>
-                    )}
+            <div className="mt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <ScaleIcon className="h-5 w-5 text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900">
+                    Total Weight: <span className="font-medium">{request.totalWeight} kg</span>
                   </span>
-                </span>
+                </div>
+                <div className="flex items-center">
+                  <CurrencyDollarIcon className="h-5 w-5 text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-900">
+                    Delivery Cost: <span className="font-medium">
+                      AED {request.actualCost || request.estimatedCost}
+                      {request.actualCost && request.actualCost !== request.estimatedCost && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          (Est: AED {request.estimatedCost})
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </div>
               </div>
+              
+              {/* COD Summary */}
+              {(() => {
+                const codItems = request.items.filter(item => item.paymentType === 'cod');
+                const totalCOD = codItems.reduce((sum, item) => sum + (item.codAmount || 0), 0);
+                
+                if (codItems.length > 0) {
+                  return (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-orange-900">Cash on Delivery (COD)</h4>
+                          <p className="text-sm text-orange-700">
+                            {codItems.length} item{codItems.length !== 1 ? 's' : ''} require{codItems.length === 1 ? 's' : ''} cash collection
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-orange-600">
+                            AED {totalCOD.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-orange-600">
+                            To be collected from recipient
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         </div>
