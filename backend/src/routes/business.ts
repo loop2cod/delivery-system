@@ -99,28 +99,36 @@ export async function businessRoutes(fastify: FastifyInstance) {
           value: totalRequests,
           change: `${requestsChange >= '0' ? '+' : ''}${requestsChange}%`,
           changeType: parseFloat(requestsChange) >= 0 ? 'increase' : 'decrease'
-        },
-        monthlySpend: {
-          value: Math.round(totalCost),
-          change: `${costChange >= '0' ? '+' : ''}${costChange}%`,
-          changeType: parseFloat(costChange) >= 0 ? 'increase' : 'decrease'
-        },
-        successRate: {
-          value: `${successRate}%`,
-          change: '+2%', // This could be calculated with more complex logic
-          changeType: 'increase'
-        },
-        urgentDeliveries: {
-          value: urgentDeliveries,
-          change: `+${urgentDeliveries}`,
-          changeType: urgentDeliveries > 0 ? 'increase' : 'neutral'
-        },
-        avgDeliveryTime: {
-          value: '4.2 hrs', // This would need more complex calculation with actual delivery times
-          change: '-8%',
-          changeType: 'decrease'
         }
       };
+
+      // Calculate monthly cost analysis data (last 5 months)
+      const monthlyData = [];
+      for (let i = 4; i >= 0; i--) {
+        const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+        
+        const monthRequests = await db.findMany('delivery_requests', {
+          companyId: user.companyId,
+          createdAt: { 
+            $gte: monthStart,
+            $lte: monthEnd
+          }
+        });
+        
+        const monthCosts = monthRequests.reduce((sum: number, req: any) => {
+          return sum + (req.actualCost || req.estimatedCost || 0);
+        }, 0);
+        
+        const monthName = monthStart.toLocaleDateString('en-US', { month: 'short' });
+        
+        monthlyData.push({
+          month: monthName,
+          requests: monthRequests.length,
+          costs: Math.round(monthCosts),
+          avgCost: monthRequests.length > 0 ? Math.round(monthCosts / monthRequests.length) : 0
+        });
+      }
 
       return {
         stats,
@@ -135,6 +143,15 @@ export async function businessRoutes(fastify: FastifyInstance) {
           urgentDeliveries,
           monthlySpend: Math.round(totalCost),
           successRate: parseFloat(successRate)
+        },
+        chartData: {
+          monthlyComparison: monthlyData,
+          currentMonthStats: {
+            avgCost: totalRequests > 0 ? Math.round(totalCost / totalRequests) : 0,
+            successRate: parseFloat(successRate),
+            avgDeliveryTime: '4.2 hrs',
+            totalRequests
+          }
         }
       };
     } catch (error) {

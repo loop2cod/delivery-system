@@ -6,19 +6,15 @@ import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { BusinessStats } from '@/components/dashboard/BusinessStats';
 import { RecentDeliveries } from '@/components/dashboard/RecentDeliveries';
-import { DeliveryChart } from '@/components/dashboard/DeliveryChart';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { businessAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { DeliveryChart } from '@/components/dashboard/DeliveryChart';
 
 interface DashboardData {
   stats: {
     activeDeliveries: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
     totalRequests: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
-    monthlySpend: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
-    avgDeliveryTime: { value: string; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
-    successRate: { value: string; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
-    urgentDeliveries: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
   };
   recentRequests: any[];
   summary: {
@@ -27,6 +23,20 @@ interface DashboardData {
     urgentDeliveries: number;
     monthlySpend: number;
     successRate: number;
+  };
+  chartData?: {
+    monthlyComparison: Array<{
+      month: string;
+      requests: number;
+      costs: number;
+      avgCost: number;
+    }>;
+    currentMonthStats: {
+      avgCost: number;
+      successRate: number;
+      avgDeliveryTime: string;
+      totalRequests: number;
+    };
   };
 }
 
@@ -121,6 +131,9 @@ export default function DashboardPage() {
 
         {/* Stats Cards */}
         <BusinessStats stats={dashboardData?.stats} loading={loading} />
+
+        {/* Charts */}
+        <DeliveryChart data={dashboardData?.chartData} loading={loading} />
 
         {/* Quick Actions */}
         <QuickActions 

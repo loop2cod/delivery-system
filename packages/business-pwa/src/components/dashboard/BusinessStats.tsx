@@ -2,11 +2,7 @@
 
 import { 
   TruckIcon, 
-  DocumentTextIcon, 
-  CurrencyDollarIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
+  DocumentTextIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
@@ -22,10 +18,6 @@ interface BusinessStatsProps {
   stats?: {
     activeDeliveries: StatData;
     totalRequests: StatData;
-    monthlySpend: StatData;
-    avgDeliveryTime: StatData;
-    successRate: StatData;
-    urgentDeliveries: StatData;
   };
   loading?: boolean;
 }
@@ -54,42 +46,13 @@ const statCards: StatCard[] = [
     color: 'bg-primary',
     description: 'This month',
   },
-  {
-    name: 'Monthly Spend',
-    key: 'monthlySpend',
-    icon: CurrencyDollarIcon,
-    color: 'bg-green-500',
-    description: 'Total delivery costs',
-    formatter: (value) => `AED ${value.toLocaleString()}`,
-  },
-  {
-    name: 'Success Rate',
-    key: 'successRate',
-    icon: CheckCircleIcon,
-    color: 'bg-emerald-500',
-    description: 'Successful deliveries',
-  },
-  {
-    name: 'Urgent Deliveries',
-    key: 'urgentDeliveries',
-    icon: ExclamationTriangleIcon,
-    color: 'bg-red-500',
-    description: 'Requires attention',
-  },
-  {
-    name: 'Avg Delivery Time',
-    key: 'avgDeliveryTime',
-    icon: ClockIcon,
-    color: 'bg-yellow-500',
-    description: 'Pickup to delivery',
-  },
 ];
 
 export function BusinessStats({ stats, loading = false }: BusinessStatsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {Array.from({ length: 6 }).map((_, index) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
           <div
             key={index}
             className="relative overflow-hidden rounded-lg bg-white px-4 pb-6 pt-5 shadow-sm animate-pulse"
@@ -107,7 +70,7 @@ export function BusinessStats({ stats, loading = false }: BusinessStatsProps) {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       {statCards.map((card) => {
         const statData = stats?.[card.key];
         if (!statData) return null;
