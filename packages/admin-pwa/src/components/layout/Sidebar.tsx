@@ -14,6 +14,7 @@ import {
   CogIcon,
   DocumentTextIcon,
   BuildingOfficeIcon,
+  ClipboardDocumentListIcon,
 } from '@heroicons/react/24/outline';
 import { TruckIcon as TruckSolidIcon } from '@heroicons/react/24/solid';
 import { clsx } from 'clsx';
@@ -21,9 +22,9 @@ import { clsx } from 'clsx';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
   { name: 'Inquiries', href: '/inquiries', icon: InboxIcon },
+  { name: 'Requests', href: '/requests', icon: ClipboardDocumentListIcon },
   { name: 'Drivers', href: '/drivers', icon: TruckIcon },
   { name: 'Companies', href: '/companies', icon: BuildingOfficeIcon },
-  { name: 'Packages', href: '/packages', icon: DocumentTextIcon },
   { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
   { name: 'Users', href: '/users', icon: UsersIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },

@@ -1978,6 +1978,466 @@ export async function adminRoutes(fastify: FastifyInstance) {
       isCustomPricing: !!pricing.companyId
     };
   }));
+
+  // Business Delivery Requests Management
+
+  // Get all delivery requests from businesses
+  fastify.get('/requests', {
+    schema: {
+      description: 'Get all delivery requests from businesses with pagination and filtering',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'integer', default: 1 },
+          limit: { type: 'integer', default: 20 },
+          status: { type: 'string' },
+          priority: { type: 'string' },
+          companyId: { type: 'string' },
+          search: { type: 'string' },
+          dateFrom: { type: 'string' },
+          dateTo: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { 
+      page = 1, 
+      limit = 20, 
+      status, 
+      priority, 
+      companyId, 
+      search, 
+      dateFrom, 
+      dateTo 
+    } = request.query as any;
+
+    // Validate pagination parameters
+    const validPage = Math.max(1, parseInt(page) || 1);
+    const validLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+
+    // Build MongoDB filter
+    const filter: any = {};
+
+    if (status) {
+      filter.status = status;
+    }
+
+    if (priority) {
+      filter.priority = priority;
+    }
+
+    if (companyId && ObjectId.isValid(companyId)) {
+      filter.companyId = companyId;
+    }
+
+    if (search) {
+      filter.$or = [
+        { requestNumber: { $regex: search, $options: 'i' } },
+        { pickupContactName: { $regex: search, $options: 'i' } },
+        { deliveryContactName: { $regex: search, $options: 'i' } },
+        { pickupAddress: { $regex: search, $options: 'i' } },
+        { deliveryAddress: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+      if (dateFrom) {
+        filter.createdAt.$gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        filter.createdAt.$lte = new Date(dateTo);
+      }
+    }
+
+    // Get total count
+    const total = await db.count('delivery_requests', filter);
+
+    // Get requests with pagination
+    const rawRequests = await db.findMany('delivery_requests', filter, {
+      sort: { createdAt: -1 },
+      skip: (validPage - 1) * validLimit,
+      limit: validLimit
+    });
+
+    // Enrich requests with company information
+    const enrichedRequests = await Promise.all(
+      rawRequests.map(async (request: any) => {
+        // Get company details
+        let company = null;
+        if (request.companyId) {
+          company = await db.findOne('companies', { _id: new ObjectId(request.companyId) });
+        }
+
+        return {
+          ...request,
+          id: request._id.toString(),
+          _id: undefined,
+          company: company ? {
+            id: company._id.toString(),
+            name: company.name,
+            contactPerson: company.contact_person,
+            email: company.email,
+            phone: company.phone
+          } : null
+        };
+      })
+    );
+
+    return {
+      requests: enrichedRequests,
+      pagination: {
+        page: validPage,
+        limit: validLimit,
+        total,
+        pages: Math.ceil(total / validLimit)
+      }
+    };
+  }));
+
+  // Get single delivery request details
+  fastify.get('/requests/:id', {
+    schema: {
+      description: 'Get delivery request details by ID',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        },
+        required: ['id']
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid request ID' });
+    }
+
+    const deliveryRequest = await db.findOne('delivery_requests', { _id: new ObjectId(id) });
+
+    if (!deliveryRequest) {
+      return reply.code(404).send({ error: 'Delivery request not found' });
+    }
+
+    // Get company details
+    let company = null;
+    if (deliveryRequest.companyId) {
+      company = await db.findOne('companies', { _id: new ObjectId(deliveryRequest.companyId) });
+    }
+
+    // Get user who created the request
+    let user = null;
+    if (deliveryRequest.userId) {
+      user = await db.findOne('users', { _id: new ObjectId(deliveryRequest.userId) });
+    }
+
+    const enrichedRequest = {
+      ...deliveryRequest,
+      id: deliveryRequest._id.toString(),
+      _id: undefined,
+      company: company ? {
+        id: company._id.toString(),
+        name: company.name,
+        contactPerson: company.contact_person,
+        email: company.email,
+        phone: company.phone,
+        industry: company.industry
+      } : null,
+      createdBy: user ? {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email
+      } : null
+    };
+
+    return { request: enrichedRequest };
+  }));
+
+  // Update delivery request status
+  fastify.put('/requests/:id/status', {
+    schema: {
+      description: 'Update delivery request status',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        },
+        required: ['id']
+      },
+      body: {
+        type: 'object',
+        required: ['status'],
+        properties: {
+          status: { 
+            type: 'string', 
+            enum: ['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'] 
+          },
+          notes: { type: 'string' },
+          driverId: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { status, notes, driverId } = request.body as any;
+
+    if (!ObjectId.isValid(id)) {
+      return reply.code(400).send({ error: 'Invalid request ID' });
+    }
+
+    // Validate driver if provided
+    if (driverId && !ObjectId.isValid(driverId)) {
+      return reply.code(400).send({ error: 'Invalid driver ID' });
+    }
+
+    const updateData: any = {
+      status,
+      updatedAt: new Date()
+    };
+
+    if (notes) {
+      updateData.adminNotes = notes;
+    }
+
+    if (driverId) {
+      // Verify driver exists and is available
+      const driver = await db.findOne('drivers', { _id: new ObjectId(driverId) });
+      if (!driver) {
+        return reply.code(404).send({ error: 'Driver not found' });
+      }
+      
+      updateData.assignedDriverId = driverId;
+      updateData.assignedAt = new Date();
+    }
+
+    const updatedRequest = await db.updateOne('delivery_requests', 
+      { _id: new ObjectId(id) }, 
+      { $set: updateData }
+    );
+
+    if (!updatedRequest) {
+      return reply.code(404).send({ error: 'Delivery request not found' });
+    }
+
+    // If assigning to driver, update driver availability
+    if (driverId && status === 'ASSIGNED') {
+      await db.updateOne('drivers', 
+        { _id: new ObjectId(driverId) }, 
+        { $set: { availability_status: 'BUSY', last_active: new Date() } }
+      );
+    }
+
+    return {
+      ...updatedRequest,
+      id: updatedRequest._id.toString(),
+      _id: undefined
+    };
+  }));
+
+  // Assign driver to delivery request
+  fastify.post('/requests/:id/assign-driver', {
+    schema: {
+      description: 'Assign driver to delivery request',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        },
+        required: ['id']
+      },
+      body: {
+        type: 'object',
+        required: ['driverId'],
+        properties: {
+          driverId: { type: 'string' },
+          notes: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { driverId, notes } = request.body as any;
+
+    if (!ObjectId.isValid(id) || !ObjectId.isValid(driverId)) {
+      return reply.code(400).send({ error: 'Invalid request or driver ID' });
+    }
+
+    // Verify request exists and is assignable
+    const deliveryRequest = await db.findOne('delivery_requests', { _id: new ObjectId(id) });
+    if (!deliveryRequest) {
+      return reply.code(404).send({ error: 'Delivery request not found' });
+    }
+
+    if (!['PENDING', 'ASSIGNED'].includes(deliveryRequest.status)) {
+      return reply.code(400).send({ error: 'Request cannot be assigned in current status' });
+    }
+
+    // Verify driver exists and is available
+    const driver = await db.findOne('drivers', { _id: new ObjectId(driverId) });
+    if (!driver) {
+      return reply.code(404).send({ error: 'Driver not found' });
+    }
+
+    if (driver.availability_status !== 'AVAILABLE') {
+      return reply.code(400).send({ error: 'Driver is not available' });
+    }
+
+    // Update request
+    const updateData = {
+      status: 'ASSIGNED',
+      assignedDriverId: driverId,
+      assignedAt: new Date(),
+      adminNotes: notes || '',
+      updatedAt: new Date()
+    };
+
+    const updatedRequest = await db.updateOne('delivery_requests',
+      { _id: new ObjectId(id) },
+      { $set: updateData }
+    );
+
+    // Update driver availability
+    await db.updateOne('drivers',
+      { _id: new ObjectId(driverId) },
+      { $set: { availability_status: 'BUSY', last_active: new Date() } }
+    );
+
+    return {
+      message: 'Driver assigned successfully',
+      request: {
+        ...updatedRequest,
+        id: updatedRequest._id.toString(),
+        _id: undefined
+      },
+      driver: {
+        ...convertMongoDocToFrontend(driver)
+      }
+    };
+  }));
+
+  // Get delivery requests statistics for admin dashboard
+  fastify.get('/requests/stats', {
+    schema: {
+      description: 'Get delivery requests statistics',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          period: { type: 'string', enum: ['today', 'week', 'month', 'all'], default: 'all' },
+          companyId: { type: 'string' }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { period = 'all', companyId } = request.query as any;
+
+    let dateFilter = {};
+    const now = new Date();
+
+    switch (period) {
+      case 'today':
+        dateFilter = { createdAt: { $gte: new Date(now.setHours(0, 0, 0, 0)) } };
+        break;
+      case 'week':
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        dateFilter = { createdAt: { $gte: weekAgo } };
+        break;
+      case 'month':
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        dateFilter = { createdAt: { $gte: monthAgo } };
+        break;
+    }
+
+    const filter = { ...dateFilter };
+    if (companyId && ObjectId.isValid(companyId)) {
+      filter.companyId = companyId;
+    }
+
+    // Get status breakdown
+    const statusStats = await db.aggregate('delivery_requests', [
+      { $match: filter },
+      { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+
+    // Get priority breakdown
+    const priorityStats = await db.aggregate('delivery_requests', [
+      { $match: filter },
+      { $group: { _id: '$priority', count: { $sum: 1 } } }
+    ]);
+
+    // Get top companies by request volume
+    const topCompanies = await db.aggregate('delivery_requests', [
+      { $match: filter },
+      { $group: { _id: '$companyId', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]);
+
+    // Enrich top companies with company details
+    const enrichedTopCompanies = await Promise.all(
+      topCompanies.map(async (item: any) => {
+        if (item._id) {
+          const company = await db.findOne('companies', { _id: new ObjectId(item._id) });
+          return {
+            company: company ? {
+              id: company._id.toString(),
+              name: company.name,
+              industry: company.industry
+            } : { id: item._id, name: 'Unknown Company' },
+            requestCount: item.count
+          };
+        }
+        return null;
+      })
+    );
+
+    // Calculate total revenue
+    const revenueStats = await db.aggregate('delivery_requests', [
+      { $match: { ...filter, status: 'DELIVERED' } },
+      { 
+        $group: { 
+          _id: null, 
+          totalRevenue: { 
+            $sum: { 
+              $ifNull: ['$actualCost', '$estimatedCost'] 
+            } 
+          },
+          count: { $sum: 1 }
+        } 
+      }
+    ]);
+
+    return {
+      totalRequests: await db.count('delivery_requests', filter),
+      statusBreakdown: statusStats.reduce((acc: any, item: any) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+      priorityBreakdown: priorityStats.reduce((acc: any, item: any) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+      topCompanies: enrichedTopCompanies.filter(Boolean),
+      revenue: {
+        total: revenueStats[0]?.totalRevenue || 0,
+        deliveredCount: revenueStats[0]?.count || 0,
+        averageValue: revenueStats[0]?.count > 0 
+          ? Math.round((revenueStats[0].totalRevenue || 0) / revenueStats[0].count) 
+          : 0
+      }
+    };
+  }));
 }
 
 export default adminRoutes;

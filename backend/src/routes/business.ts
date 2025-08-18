@@ -200,7 +200,9 @@ export async function businessRoutes(fastify: FastifyInstance) {
                 weight: { type: 'number', minimum: 0 },
                 dimensions: { type: 'string' },
                 value: { type: 'number', minimum: 0 },
-                fragile: { type: 'boolean' }
+                fragile: { type: 'boolean' },
+                paymentType: { type: 'string', enum: ['paid', 'cod'] },
+                codAmount: { type: 'number', minimum: 0 }
               }
             }
           },

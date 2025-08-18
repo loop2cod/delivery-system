@@ -284,6 +284,95 @@ export interface DeliveryPricing {
   updatedAt?: string;
 }
 
+// Delivery Request interfaces
+export interface DeliveryRequest {
+  id: string;
+  requestNumber: string;
+  companyId: string;
+  userId: string;
+  priority: 'normal' | 'high' | 'urgent';
+  status: 'PENDING' | 'ASSIGNED' | 'PICKED_UP' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  
+  // Pickup details
+  pickupContactName: string;
+  pickupPhone: string;
+  pickupAddress: string;
+  pickupInstructions?: string;
+  
+  // Delivery details
+  deliveryContactName: string;
+  deliveryPhone: string;
+  deliveryAddress: string;
+  deliveryInstructions?: string;
+  
+  // Schedule
+  pickupDate: string;
+  pickupTime: string;
+  deliveryDate: string;
+  deliveryTime: string;
+  
+  // Items and pricing
+  items: Array<{
+    description: string;
+    quantity: number;
+    weight?: number;
+    dimensions?: string;
+    value?: number;
+    fragile?: boolean;
+  }>;
+  totalWeight: number;
+  estimatedCost?: number;
+  actualCost?: number;
+  priceCalculation?: any;
+  
+  // Additional details
+  specialRequirements?: string;
+  internalReference?: string;
+  adminNotes?: string;
+  
+  // Assignment
+  assignedDriverId?: string;
+  assignedAt?: string;
+  
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  
+  // Enriched data from API
+  company?: {
+    id: string;
+    name: string;
+    contactPerson: string;
+    email: string;
+    phone: string;
+    industry?: string;
+  };
+  createdBy?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+}
+
+export interface DeliveryRequestStats {
+  totalRequests: number;
+  statusBreakdown: Record<string, number>;
+  priorityBreakdown: Record<string, number>;
+  topCompanies: Array<{
+    company: {
+      id: string;
+      name: string;
+      industry?: string;
+    };
+    requestCount: number;
+  }>;
+  revenue: {
+    total: number;
+    deliveredCount: number;
+    averageValue: number;
+  };
+}
+
 // API client class using axios
 class AdminAPI {
   // Auth endpoints
@@ -654,6 +743,81 @@ class AdminAPI {
     }>('/api/admin/pricing/calculate', data);
     return response.data;
   }
+
+  // Delivery Request Management endpoints
+  async getDeliveryRequests(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    priority?: string;
+    companyId?: string;
+    search?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}): Promise<{
+    requests: DeliveryRequest[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+  }> {
+    const response = await api.get<{
+      requests: DeliveryRequest[];
+      pagination: {
+        page: number;
+        limit: number;
+        total: number;
+        pages: number;
+      };
+    }>('/api/admin/requests', { params });
+    return response.data;
+  }
+
+  async getDeliveryRequest(id: string): Promise<{ request: DeliveryRequest }> {
+    const response = await api.get<{ request: DeliveryRequest }>(`/api/admin/requests/${id}`);
+    return response.data;
+  }
+
+  async updateDeliveryRequestStatus(
+    id: string,
+    data: {
+      status: DeliveryRequest['status'];
+      notes?: string;
+      driverId?: string;
+    }
+  ): Promise<DeliveryRequest> {
+    const response = await api.put<DeliveryRequest>(`/api/admin/requests/${id}/status`, data);
+    return response.data;
+  }
+
+  async assignDriverToRequest(
+    id: string,
+    data: {
+      driverId: string;
+      notes?: string;
+    }
+  ): Promise<{
+    message: string;
+    request: DeliveryRequest;
+    driver: Driver;
+  }> {
+    const response = await api.post<{
+      message: string;
+      request: DeliveryRequest;
+      driver: Driver;
+    }>(`/api/admin/requests/${id}/assign-driver`, data);
+    return response.data;
+  }
+
+  async getDeliveryRequestStats(params: {
+    period?: 'today' | 'week' | 'month' | 'all';
+    companyId?: string;
+  } = {}): Promise<DeliveryRequestStats> {
+    const response = await api.get<DeliveryRequestStats>('/api/admin/requests/stats', { params });
+    return response.data;
+  }
 }
 
 // Create API instance
@@ -694,6 +858,13 @@ export const getStatusColor = (status: string) => {
     APPROVED: 'bg-green-100 text-green-800',
     REJECTED: 'bg-red-100 text-red-800',
     CONVERTED: 'bg-purple-100 text-purple-800',
+    // Request statuses
+    PENDING: 'bg-yellow-100 text-yellow-800',
+    ASSIGNED: 'bg-blue-100 text-blue-800',
+    PICKED_UP: 'bg-indigo-100 text-indigo-800',
+    IN_TRANSIT: 'bg-purple-100 text-purple-800',
+    DELIVERED: 'bg-green-100 text-green-800',
+    CANCELLED: 'bg-red-100 text-red-800',
   };
   return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
 };
@@ -705,6 +876,31 @@ export const getStatusLabel = (status: string) => {
     APPROVED: 'Approved',
     REJECTED: 'Rejected',
     CONVERTED: 'Converted',
+    // Request statuses
+    PENDING: 'Pending',
+    ASSIGNED: 'Assigned',
+    PICKED_UP: 'Picked Up',
+    IN_TRANSIT: 'In Transit',
+    DELIVERED: 'Delivered',
+    CANCELLED: 'Cancelled',
   };
   return labels[status as keyof typeof labels] || status;
+};
+
+export const getPriorityColor = (priority: string) => {
+  const colors = {
+    normal: 'bg-gray-100 text-gray-800',
+    high: 'bg-orange-100 text-orange-800',
+    urgent: 'bg-red-100 text-red-800',
+  };
+  return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+};
+
+export const getPriorityLabel = (priority: string) => {
+  const labels = {
+    normal: 'Normal',
+    high: 'High',
+    urgent: 'Urgent',
+  };
+  return labels[priority as keyof typeof labels] || priority;
 };
