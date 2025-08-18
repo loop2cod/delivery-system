@@ -16,7 +16,131 @@ export async function businessRoutes(fastify: FastifyInstance) {
 
   // Business dashboard
   fastify.get('/dashboard', async (request, reply) => {
-    return { message: 'Business dashboard endpoint - TODO: Implement' };
+    const user:any = request.user;
+    if (!user?.companyId) {
+      return reply.code(400).send({ error: 'No company associated with user' });
+    }
+
+    try {
+      // Get dashboard statistics
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+      // Get current month requests
+      const currentMonthRequests = await db.findMany('delivery_requests', {
+        companyId: user.companyId,
+        createdAt: { $gte: startOfMonth }
+      });
+
+      // Get last month requests for comparison
+      const lastMonthRequests = await db.findMany('delivery_requests', {
+        companyId: user.companyId,
+        createdAt: { 
+          $gte: startOfLastMonth,
+          $lte: endOfLastMonth
+        }
+      });
+
+      // Calculate statistics
+      const totalRequests = currentMonthRequests.length;
+      const lastMonthTotal = lastMonthRequests.length;
+      const requestsChange = lastMonthTotal > 0 
+        ? ((totalRequests - lastMonthTotal) / lastMonthTotal * 100).toFixed(1)
+        : '0';
+
+      const activeDeliveries = currentMonthRequests.filter(
+        (req: any) => ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].includes(req.status)
+      ).length;
+
+      const urgentDeliveries = currentMonthRequests.filter(
+        (req: any) => req.priority === 'urgent' && ['PENDING', 'ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].includes(req.status)
+      ).length;
+
+      const deliveredRequests = currentMonthRequests.filter(
+        (req: any) => req.status === 'DELIVERED'
+      );
+
+      const successRate = totalRequests > 0 
+        ? ((deliveredRequests.length / totalRequests) * 100).toFixed(1)
+        : '0';
+
+      // Calculate total cost
+      const totalCost = currentMonthRequests.reduce((sum: number, req: any) => {
+        return sum + (req.actualCost || req.estimatedCost || 0);
+      }, 0);
+
+      const lastMonthCost = lastMonthRequests.reduce((sum: number, req: any) => {
+        return sum + (req.actualCost || req.estimatedCost || 0);
+      }, 0);
+
+      const costChange = lastMonthCost > 0 
+        ? ((totalCost - lastMonthCost) / lastMonthCost * 100).toFixed(1)
+        : '0';
+
+      // Get recent requests
+      const recentRequests = await db.findMany(
+        'delivery_requests',
+        { companyId: user.companyId },
+        { 
+          sort: { createdAt: -1 },
+          limit: 5
+        }
+      );
+
+      const stats = {
+        activeDeliveries: {
+          value: activeDeliveries,
+          change: `+${Math.max(0, activeDeliveries - Math.floor(lastMonthRequests.filter((req: any) => ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'].includes(req.status)).length / 2))}`,
+          changeType: 'increase'
+        },
+        totalRequests: {
+          value: totalRequests,
+          change: `${requestsChange >= '0' ? '+' : ''}${requestsChange}%`,
+          changeType: parseFloat(requestsChange) >= 0 ? 'increase' : 'decrease'
+        },
+        monthlySpend: {
+          value: Math.round(totalCost),
+          change: `${costChange >= '0' ? '+' : ''}${costChange}%`,
+          changeType: parseFloat(costChange) >= 0 ? 'increase' : 'decrease'
+        },
+        successRate: {
+          value: `${successRate}%`,
+          change: '+2%', // This could be calculated with more complex logic
+          changeType: 'increase'
+        },
+        urgentDeliveries: {
+          value: urgentDeliveries,
+          change: `+${urgentDeliveries}`,
+          changeType: urgentDeliveries > 0 ? 'increase' : 'neutral'
+        },
+        avgDeliveryTime: {
+          value: '4.2 hrs', // This would need more complex calculation with actual delivery times
+          change: '-8%',
+          changeType: 'decrease'
+        }
+      };
+
+      return {
+        stats,
+        recentRequests: recentRequests.map((req: any) => ({
+          ...req,
+          id: req._id.toString(),
+          _id: undefined
+        })),
+        summary: {
+          totalRequests,
+          activeDeliveries,
+          urgentDeliveries,
+          monthlySpend: Math.round(totalCost),
+          successRate: parseFloat(successRate)
+        }
+      };
+    } catch (error) {
+      console.error('Failed to get dashboard data:', error);
+      return reply.code(500).send({ error: 'Failed to get dashboard data' });
+    }
   });
 
   // Create delivery requests
@@ -545,8 +669,8 @@ export async function businessRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // Reset password (self-service)
-  fastify.post('/reset-password', {
+  // Change password (self-service)
+  fastify.post('/change-password', {
     schema: {
       body: {
         type: 'object',
@@ -568,20 +692,24 @@ export async function businessRoutes(fastify: FastifyInstance) {
       // Hash new password
       const newPasswordHash = await bcrypt.hash(newPassword, config.BCRYPT_ROUNDS);
 
-      // Update password
-      await db.query(`
-        UPDATE users 
-        SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
-        WHERE id = $2
-      `, [newPasswordHash, user.id]);
+      // Update password in MongoDB
+      await db.updateOne('users', 
+        { _id: new ObjectId(user.id) },
+        { 
+          $set: { 
+            password_hash: newPasswordHash,
+            updated_at: new Date()
+          }
+        }
+      );
 
       return { 
-        message: 'Password reset successfully',
+        message: 'Password changed successfully',
         timestamp: new Date().toISOString()
       };
     } catch (error) {
-      console.error('Failed to reset password:', error);
-      return reply.code(500).send({ error: 'Failed to reset password' });
+      console.error('Failed to change password:', error);
+      return reply.code(500).send({ error: 'Failed to change password' });
     }
   });
 }

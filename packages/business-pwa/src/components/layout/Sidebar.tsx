@@ -26,9 +26,8 @@ const navigation = [
   { name: 'My Deliveries', href: '/deliveries', icon: TruckIcon },
   { name: 'Request History', href: '/requests', icon: DocumentTextIcon },
   { name: 'Company Profile', href: '/profile', icon: BuildingOffice2Icon },
-  { name: 'Billing & Invoices', href: '/billing', icon: CreditCardIcon },
-  { name: 'Reports & Analytics', href: '/reports', icon: ChartBarIcon },
-  { name: 'Team Management', href: '/team', icon: UserGroupIcon },
+  // { name: 'Billing & Invoices', href: '/billing', icon: CreditCardIcon },
+  // { name: 'Reports & Analytics', href: '/reports', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: CogIcon },
 ];
 

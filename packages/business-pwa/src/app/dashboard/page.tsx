@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
@@ -8,19 +8,57 @@ import { BusinessStats } from '@/components/dashboard/BusinessStats';
 import { RecentDeliveries } from '@/components/dashboard/RecentDeliveries';
 import { DeliveryChart } from '@/components/dashboard/DeliveryChart';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { businessAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
+
+interface DashboardData {
+  stats: {
+    activeDeliveries: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+    totalRequests: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+    monthlySpend: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+    avgDeliveryTime: { value: string; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+    successRate: { value: string; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+    urgentDeliveries: { value: number; change: string; changeType: 'increase' | 'decrease' | 'neutral' };
+  };
+  recentRequests: any[];
+  summary: {
+    totalRequests: number;
+    activeDeliveries: number;
+    urgentDeliveries: number;
+    monthlySpend: number;
+    successRate: number;
+  };
+}
 
 export default function DashboardPage() {
   const { isAuthenticated, isLoading, user } = useBusiness();
   const router = useRouter();
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch dashboard data from backend
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const data = await businessAPI.getDashboard();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login');
+    } else if (isAuthenticated) {
+      fetchDashboardData();
     }
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading) {
+  if (isLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -51,28 +89,30 @@ export default function DashboardPage() {
 
   return (
     <BusinessLayout>
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
         {/* Header */}
-        <div className="company-header rounded-lg px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white">
+        <div className="company-header rounded-lg px-4 py-6 sm:px-6 sm:py-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-white">
                 {getGreeting()}, {user?.firstName}!
               </h1>
-              <p className="mt-2 text-white/90">
+              <p className="mt-2 text-white/90 text-sm sm:text-base">
                 Welcome to {user?.company?.name} delivery dashboard
               </p>
-              <div className="mt-4 flex items-center space-x-4 text-sm text-white/80">
+              <div className="mt-4 flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-white/80">
                 <span>Industry: {user?.company?.industry}</span>
-                <span>•</span>
+                <span className="hidden sm:inline">•</span>
                 <span>Role: {user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'User'}</span>
               </div>
             </div>
-            <div className="hidden md:block">
-              <div className="bg-white/10 rounded-lg p-4">
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-white">23</p>
-                  <p className="text-white/80 text-sm">Active Deliveries</p>
+            <div className="sm:block">
+              <div className="bg-white/10 rounded-lg p-3 sm:p-4">
+                <div className="text-center sm:text-right">
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    {dashboardData?.summary?.activeDeliveries || 0}
+                  </p>
+                  <p className="text-white/80 text-xs sm:text-sm">Active Deliveries</p>
                 </div>
               </div>
             </div>
@@ -80,57 +120,16 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats Cards */}
-        <BusinessStats />
-
-        {/* Charts */}
-        <DeliveryChart />
+        <BusinessStats stats={dashboardData?.stats} loading={loading} />
 
         {/* Quick Actions */}
-        <QuickActions onActionClick={handleActionClick} />
+        <QuickActions 
+          onActionClick={handleActionClick} 
+          summary={dashboardData?.summary}
+        />
 
         {/* Recent Deliveries */}
-        <RecentDeliveries />
-
-        {/* Company Overview */}
-        <div className="bg-white shadow-sm rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">
-            Company Overview
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h4 className="font-medium text-gray-900 mb-2">Monthly Budget</h4>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-gray-900">AED 15,000</span>
-                <span className="text-sm text-green-600">83% used</span>
-              </div>
-              <div className="mt-2 bg-gray-200 rounded-full h-2">
-                <div className="bg-green-500 h-2 rounded-full" style={{ width: '83%' }}></div>
-              </div>
-            </div>
-            
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h4 className="font-medium text-gray-900 mb-2">Team Members</h4>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-gray-900">12</span>
-                <span className="text-sm text-blue-600">8 active</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Manager, employees, and admins
-              </p>
-            </div>
-            
-            <div className="border border-gray-200 rounded-lg p-4">
-              <h4 className="font-medium text-gray-900 mb-2">Service Level</h4>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-gray-900">Pro</span>
-                <span className="text-sm text-purple-600">Premium</span>
-              </div>
-              <p className="text-sm text-gray-500 mt-2">
-                Unlimited deliveries, priority support
-              </p>
-            </div>
-          </div>
-        </div>
+        <RecentDeliveries requests={dashboardData?.recentRequests} loading={loading} />
       </div>
     </BusinessLayout>
   );

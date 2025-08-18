@@ -200,21 +200,18 @@ export default function RequestsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
-              Request History
+              Requests
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
-              View and manage all delivery requests for {user?.company?.name}
-            </p>
           </div>
           
           <div className="flex items-center space-x-3">
-            <button
+            {/* <button
               onClick={handleExportRequests}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
               <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
               Export
-            </button>
+            </button> */}
             
             <button
               onClick={handleNewRequest}
@@ -227,7 +224,7 @@ export default function RequestsPage() {
         </div>
 
         {/* Real Stats */}
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           {loadingStats ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="bg-white overflow-hidden shadow-sm rounded-lg animate-pulse">
@@ -242,7 +239,6 @@ export default function RequestsPage() {
               { name: 'Total Requests', value: stats.total, color: 'text-blue-600' },
               { name: 'Pending', value: stats.pending, color: 'text-yellow-600' },
               { name: 'In Progress', value: stats.inProgress, color: 'text-purple-600' },
-              { name: 'Delivered', value: stats.delivered, color: 'text-green-600' },
               { name: 'Cancelled', value: stats.cancelled, color: 'text-red-600' },
             ].map((item) => (
               <div key={item.name} className="bg-white overflow-hidden shadow-sm rounded-lg">
