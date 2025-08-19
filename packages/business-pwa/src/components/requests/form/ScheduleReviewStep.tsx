@@ -25,59 +25,48 @@ export function ScheduleReviewStep({
           <h3 className="text-lg font-medium text-gray-900">Schedule</h3>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <h4 className="font-medium text-gray-900 mb-3">Pickup</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date
-                </label>
-                <input
-                  {...register('schedule.pickupDate')}
-                  type="date"
-                  className="form-input"
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Time
-                </label>
-                <input
-                  {...register('schedule.pickupTime')}
-                  type="time"
-                  className="form-input"
-                />
-              </div>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pickup Date
+            </label>
+            <input
+              {...register('schedule.pickupDate')}
+              type="date"
+              className="form-input"
+              min={new Date().toISOString().split('T')[0]}
+            />
           </div>
-          
           <div>
-            <h4 className="font-medium text-gray-900 mb-3">Delivery</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date
-                </label>
-                <input
-                  {...register('schedule.deliveryDate')}
-                  type="date"
-                  className="form-input"
-                  min={new Date().toISOString().split('T')[0]}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Time
-                </label>
-                <input
-                  {...register('schedule.deliveryTime')}
-                  type="time"
-                  className="form-input"
-                />
-              </div>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pickup Time
+            </label>
+            <input
+              {...register('schedule.pickupTime')}
+              type="time"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Delivery Date
+            </label>
+            <input
+              {...register('schedule.deliveryDate')}
+              type="date"
+              className="form-input"
+              min={new Date().toISOString().split('T')[0]}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Delivery Time
+            </label>
+            <input
+              {...register('schedule.deliveryTime')}
+              type="time"
+              className="form-input"
+            />
           </div>
         </div>
       </div>

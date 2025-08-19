@@ -51,7 +51,7 @@ export function PickupDeliveryStep({
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Contact Name
@@ -75,27 +75,29 @@ export function PickupDeliveryStep({
             />
           </div>
         </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Pickup Address
-          </label>
-          <textarea
-            {...register('pickupDetails.address')}
-            className="form-input"
-            rows={3}
-            placeholder="Complete pickup address including building, floor, and any landmarks"
-          />
-        </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Special Instructions (Optional)
-          </label>
-          <textarea
-            {...register('pickupDetails.instructions')}
-            className="form-input"
-            rows={2}
-            placeholder="Any special instructions for pickup (e.g., gate code, specific entrance)"
-          />
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pickup Address
+            </label>
+            <textarea
+              {...register('pickupDetails.address')}
+              className="form-input"
+              rows={3}
+              placeholder="Complete pickup address including building, floor, and any landmarks"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Special Instructions (Optional)
+            </label>
+            <textarea
+              {...register('pickupDetails.instructions')}
+              className="form-input"
+              rows={3}
+              placeholder="Any special instructions for pickup (e.g., gate code, specific entrance)"
+            />
+          </div>
         </div>
       </div>
 
@@ -114,7 +116,7 @@ export function PickupDeliveryStep({
             Copy pickup contact
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Contact Name
@@ -138,27 +140,29 @@ export function PickupDeliveryStep({
             />
           </div>
         </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Delivery Address
-          </label>
-          <textarea
-            {...register('deliveryDetails.address')}
-            className="form-input"
-            rows={3}
-            placeholder="Complete delivery address including building, floor, and any landmarks"
-          />
-        </div>
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Special Instructions (Optional)
-          </label>
-          <textarea
-            {...register('deliveryDetails.instructions')}
-            className="form-input"
-            rows={2}
-            placeholder="Any special instructions for delivery (e.g., office hours, reception desk)"
-          />
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Delivery Address
+            </label>
+            <textarea
+              {...register('deliveryDetails.address')}
+              className="form-input"
+              rows={3}
+              placeholder="Complete delivery address including building, floor, and any landmarks"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Special Instructions (Optional)
+            </label>
+            <textarea
+              {...register('deliveryDetails.instructions')}
+              className="form-input"
+              rows={3}
+              placeholder="Any special instructions for delivery (e.g., office hours, reception desk)"
+            />
+          </div>
         </div>
       </div>
     </div>

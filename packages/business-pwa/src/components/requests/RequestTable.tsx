@@ -104,13 +104,12 @@ export function RequestTable({
     pages: 0
   });
   const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
 
   // Load requests data
   useEffect(() => {
     loadRequests();
-  }, [pagination.page, pagination.limit, statusFilter, priorityFilter, globalFilter]);
+  }, [pagination.page, pagination.limit, statusFilter, globalFilter]);
 
   const loadRequests = async () => {
     try {
@@ -157,22 +156,12 @@ export function RequestTable({
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const handlePriorityFilterChange = (priority: string) => {
-    setPriorityFilter(priority);
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
 
   const handleSearchChange = (search: string) => {
     setGlobalFilter(search);
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const clearAllFilters = () => {
-    setStatusFilter('');
-    setPriorityFilter('');
-    setGlobalFilter('');
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
 
   const handleSelectRequest = (requestId: string, checked: boolean) => {
     if (checked) {
@@ -224,7 +213,7 @@ export function RequestTable({
     () => [
       {
         id: 'select',
-        header: ({ table }) => (
+        header: () => (
           <Checkbox
             checked={isAllCurrentPageSelected()}
             onCheckedChange={(checked) => handleSelectAll(!!checked)}
@@ -834,128 +823,8 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
     return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&format=png&ecc=M`;
   };
 
-  const generateBarcode = (text: string) => {
-    // Using TEC-IT barcode API for actual barcode generation
-    return `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(text)}&code=Code128&dpi=150&dataseparator=&color=%23000000&bgcolor=%23ffffff&qunit=Mm&quiet=0`;
-  };
 
-  const generateTrackingNumber = (requestNumber: string) => {
-    // Generate a tracking number based on request number
-    const prefix = 'JTE';
-    const suffix = requestNumber.replace(/[^0-9]/g, '').slice(-8).padStart(8, '0');
-    return `${prefix}${suffix}`;
-  };
 
-  const labelHTML = requests.map((request, index) => {
-    const codItems = request.items?.filter((item: any) => item.paymentType === 'cod') || [];
-    const totalCOD = codItems.reduce((sum: number, item: any) => sum + (item.codAmount || 0), 0);
-    const hasFragileItems = request.items?.some((item: any) => item.fragile) || false;
-
-    // Extract addresses (simplified - you might want to parse these better)
-    const pickupParts = request.pickupAddress.split(',').map(s => s.trim());
-    const deliveryParts = request.deliveryAddress.split(',').map(s => s.trim());
-
-    const specialRequirements = [];
-    if (hasFragileItems) specialRequirements.push('FRAGILE');
-    if (totalCOD > 0) specialRequirements.push('CASH ON DELIVERY');
-
-    return `
-      <div class="label" style="
-        width: 48%;
-        height: 48vh;
-        border: 2px solid #000;
-        margin: 1%;
-        padding: 8px;
-        font-family: Arial, sans-serif;
-        font-size: 10px;
-        line-height: 1.2;
-        page-break-inside: avoid;
-        display: inline-block;
-        vertical-align: top;
-        box-sizing: border-box;
-      ">
-        <!-- Header -->
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 4px;">
-          <div style="font-weight: bold; font-size: 14px;">J&T EXPRESS LOGO</div>
-          <div style="text-align: right;">
-            <div style="font-weight: bold;">STANDARD</div>
-            <div style="font-size: 8px;">Print Date: ${currentDate}</div>
-          </div>
-        </div>
-
-        <!-- Tracking Info -->
-        <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-          <div style="font-weight: bold; font-size: 12px;">AB01-AU005-001</div>
-          <div style="font-weight: bold;">1/1</div>
-        </div>
-
-        <!-- Shipper Info -->
-        <div style="margin-bottom: 8px;">
-          <div style="font-weight: bold; margin-bottom: 2px;">Shipper:</div>
-          <div style="font-weight: bold;">${request.pickupContactName || pickupParts[0] || 'Shipper Name'}</div>
-          <div>${request.pickupPhone || '+971501234568'}</div>
-          <div style="font-size: 9px;">${request.pickupAddress}</div>
-        </div>
-
-        <!-- Recipient Info -->
-        <div style="margin-bottom: 8px;">
-          <div style="font-weight: bold; margin-bottom: 2px;">Recipient:</div>
-          <div style="font-weight: bold;">${request.deliveryContactName || deliveryParts[0] || 'Recipient Name'}</div>
-          <div>${request.deliveryPhone || '+971501234568'}</div>
-          <div style="font-size: 9px;">${request.deliveryAddress}</div>
-        </div>
-
-        <!-- Items List -->
-        <div style="margin-bottom: 8px;">
-          <div style="font-weight: bold; margin-bottom: 2px;">Items List:</div>
-          ${request.items?.map((item: any) => `
-            <div style="margin-left: 4px; font-size: 9px;">
-              - Description: ${item.description}
-              - Quantity: ${item.quantity}
-              - Weight: ${item.weight || 0} kg
-              ${item.dimensions ? `- Dimensions: ${item.dimensions}` : ''}
-              ${item.paymentType === 'cod' ? `- COD Amount: ${item.codAmount || 0} AED` : ''}
-              ${item.fragile ? '- Fragile: Yes' : ''}
-            </div>
-          `).join('') || ''}
-        </div>
-
-        <!-- QR Code and Barcode Section -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div style="text-align: center;">
-            <div style="font-weight: bold; margin-bottom: 2px;">QR Code:</div>
-            <div style="width: 60px; height: 60px; border: 1px solid #ccc; display: flex; align-items: center; justify-content: center; font-size: 8px;">
-              🟦 QR Code
-            </div>
-          </div>
-          <div style="flex: 1; margin-left: 8px;">
-            <div style="font-weight: bold; margin-bottom: 2px;">${request.requestNumber}</div>
-            <div style="font-weight: bold; margin-bottom: 4px;">Barcode:</div>
-            <div style="border: 1px solid #ccc; padding: 4px; text-align: center; font-family: monospace;">
-              ████████ JTE300332461385 ██████
-            </div>
-          </div>
-        </div>
-
-        <!-- Schedule Info -->
-        <div style="margin-bottom: 6px; font-size: 9px;">
-          <div>Pickup: ${new Date(request.pickupDate).toLocaleDateString()} at ${request.pickupTime || '00:00'}</div>
-          <div>Delivery: ${new Date(request.deliveryDate).toLocaleDateString()} at ${request.deliveryTime || '00:00'}</div>
-        </div>
-
-        <!-- Reference and Special -->
-        <div style="font-size: 9px; margin-bottom: 4px;">
-          ${request.internalReference ? `<div>Internal Ref: ${request.internalReference}</div>` : ''}
-          ${specialRequirements.length > 0 ? `<div style="font-weight: bold; color: red;">Special: ${specialRequirements.join(' | ')}</div>` : ''}
-        </div>
-
-        <!-- Footer -->
-        <div style="border-top: 1px solid #000; padding-top: 2px; text-align: center; font-size: 8px;">
-          Customer Service: +97145435201
-        </div>
-      </div>
-    `;
-  }).join('');
 
   const printHTML = `
     <!DOCTYPE html>
@@ -1000,15 +869,14 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          border-bottom: 2px solid #000;
-          padding-bottom: 3mm;
+          border-bottom: 1px solid #333;
+          padding-bottom: 2mm;
           margin-bottom: 3mm;
         }
         .logo {
           font-weight: bold;
           font-size: 16px;
-          color: #e31e24;
-          letter-spacing: 1px;
+          color: #333;
         }
         .service-type {
           text-align: right;
@@ -1033,14 +901,13 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
           font-size: 10px;
         }
         .contact-section {
-          margin-bottom: 4mm;
-          border-left: 3px solid #e31e24;
-          padding-left: 3mm;
+          margin-bottom: 3mm;
+          padding-left: 1mm;
         }
         .contact-label {
           font-weight: bold;
-          font-size: 10px;
-          color: #e31e24;
+          font-size: 9px;
+          color: #666;
           margin-bottom: 1mm;
         }
         .contact-name {
@@ -1076,47 +943,29 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
           margin-bottom: 1mm;
           color: #333;
         }
-        .qr-barcode-section {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
+        .qr-section {
+          text-align: center;
           margin-bottom: 4mm;
-          gap: 3mm;
         }
         .qr-container {
           text-align: center;
-          flex-shrink: 0;
         }
         .qr-title {
           font-weight: bold;
-          font-size: 8px;
+          font-size: 9px;
           margin-bottom: 1mm;
+          color: #333;
         }
         .qr-code {
-          width: 60px;
-          height: 60px;
-          border: 1px solid #ddd;
-        }
-        .barcode-container {
-          flex: 1;
-          min-width: 0;
+          width: 80px;
+          height: 80px;
+          border: 1px solid #ccc;
         }
         .request-number {
           font-weight: bold;
           font-size: 10px;
           margin-bottom: 2mm;
           color: #000;
-        }
-        .barcode-title {
-          font-weight: bold;
-          font-size: 8px;
-          margin-bottom: 1mm;
-        }
-        .barcode {
-          width: 100%;
-          height: 30px;
-          border: 1px solid #ddd;
-          background: white;
         }
         .schedule-info {
           margin-bottom: 3mm;
@@ -1139,13 +988,12 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
         }
         .special-requirements {
           font-weight: bold;
-          color: #e31e24;
-          background: #fff5f5;
+          font-size: 8px;
+          color: #dc2626;
           padding: 1mm;
-          border-radius: 2px;
         }
         .footer {
-          border-top: 1px solid #000;
+          border-top: 1px solid #ccc;
           padding-top: 2mm;
           text-align: center;
           font-size: 7px;
@@ -1174,7 +1022,7 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
     const pageLabels = requests.slice(pageIndex * 4, (pageIndex + 1) * 4);
     return `
           <div class="page">
-            ${pageLabels.map((request, index) => {
+            ${pageLabels.map((request) => {
       const codItems = request.items?.filter((item: any) => item.paymentType === 'cod') || [];
       const totalCOD = codItems.reduce((sum: number, item: any) => sum + (item.codAmount || 0), 0);
       const hasFragileItems = request.items?.some((item: any) => item.fragile) || false;
@@ -1186,20 +1034,13 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
       if (hasFragileItems) specialRequirements.push('FRAGILE HANDLING');
       if (totalCOD > 0) specialRequirements.push('CASH ON DELIVERY');
 
-      const trackingNumber = generateTrackingNumber(request.requestNumber);
-      const qrData = JSON.stringify({
-        requestNumber: request.requestNumber,
-        trackingNumber: trackingNumber,
-        pickup: request.pickupAddress,
-        delivery: request.deliveryAddress,
-        cod: totalCOD > 0 ? totalCOD : null
-      });
+      const qrData = `https://grsdeliver.com/req/${request.requestNumber}`;
 
       return `
                 <div class="label">
                   <!-- Header -->
                   <div class="label-header">
-                    <div class="logo">J&T EXPRESS</div>
+                    <div class="logo">GRS Deliver</div>
                     <div class="service-type">
                       <div class="type">STANDARD</div>
                       <div>Print: ${currentDate}</div>
@@ -1208,7 +1049,7 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
 
                   <!-- Tracking Info -->
                   <div class="tracking-info">
-                    <div class="tracking-number">AB01-AU005-001</div>
+                    <div class="tracking-number">${request.requestNumber}</div>
                     <div class="sequence">1/1</div>
                   </div>
 
@@ -1241,16 +1082,12 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
                     `).join('') || '<div class="item">No items specified</div>'}
                   </div>
 
-                  <!-- QR Code and Barcode Section -->
-                  <div class="qr-barcode-section">
+                  <!-- QR Code Section -->
+                  <div class="qr-section">
                     <div class="qr-container">
-                      <div class="qr-title">QR CODE</div>
-                      <img src="${generateQRCode(qrData, 60)}" alt="QR Code" class="qr-code" />
-                    </div>
-                    <div class="barcode-container">
                       <div class="request-number">${request.requestNumber}</div>
-                      <div class="barcode-title">TRACKING: ${trackingNumber}</div>
-                      <img src="${generateBarcode(trackingNumber)}" alt="Barcode" class="barcode" />
+                      <div class="qr-title">QR CODE</div>
+                      <img src="${generateQRCode(qrData, 80)}" alt="QR Code" class="qr-code" />
                     </div>
                   </div>
 

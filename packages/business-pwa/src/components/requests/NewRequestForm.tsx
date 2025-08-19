@@ -48,7 +48,7 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
     },
   });
 
-  const { append, remove } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control,
     name: 'items',
   });
@@ -280,21 +280,66 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
   };
 
   const addNewItem = () => {
-    append({ description: '', quantity: 1, weight: 0.5, fragile: false, paymentType: 'paid' });
-    toast.info('New item added');
+    const maxItems = 10;
+    
+    if (fields.length >= maxItems) {
+      toast.warning(`Maximum ${maxItems} items allowed`, {
+        description: 'Remove an existing item to add a new one'
+      });
+      return;
+    }
+    
+    const newItemNumber = fields.length + 1;
+    
+    append({ 
+      description: '', 
+      quantity: 1, 
+      weight: 0.5, 
+      fragile: false, 
+      paymentType: 'paid',
+      dimensions: '',
+      value: undefined,
+      codAmount: undefined
+    });
+    
+    toast.success(`Item ${newItemNumber} added successfully`, {
+      description: `You now have ${newItemNumber} item${newItemNumber !== 1 ? 's' : ''} in your delivery`
+    });
   };
 
   const removeItem = (index: number) => {
-    const items = getValues('items');
-    const itemDescription = items[index]?.description || `Item ${index + 1}`;
-    remove(index);
-    toast.success(`Item removed: ${itemDescription.substring(0, 30)}${itemDescription.length > 30 ? '...' : ''}`);
+    if (fields.length <= 1) {
+      toast.warning('Cannot remove the last item', {
+        description: 'At least one item is required for delivery'
+      });
+      return;
+    }
+    
+    try {
+      const remainingItems = fields.length - 1;
+      
+      remove(index);
+      
+      toast.success(`Item removed successfully`, {
+        description: `${remainingItems} item${remainingItems !== 1 ? 's' : ''} remaining in your delivery`
+      });
+      
+      // Auto-recalculate pricing after item removal
+      setTimeout(() => {
+        calculatePriceFromWeight();
+      }, 100);
+    } catch (error) {
+      console.error('Error removing item:', error);
+      toast.error('Failed to remove item', {
+        description: 'Please try again'
+      });
+    }
   };
 
   const stepLabels = ['Pickup & Delivery', 'Items & Details', 'Schedule & Review'];
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="max-w-4xl mx-auto" noValidate>
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="max-w-7xl mx-auto" noValidate>
       <StepIndicator 
         currentStep={currentStep} 
         totalSteps={totalSteps} 
@@ -316,10 +361,13 @@ export function NewRequestForm({ onSubmit, onCancel, isSubmitting = false }: New
           <ItemsStep
             register={register}
             control={control}
+            fields={fields}
             watchedValues={watchedValues}
             companyPricing={companyPricing}
             loadingPricing={loadingPricing}
             calculatePriceForWeight={calculatePriceForWeight}
+            estimatedCost={estimatedCost}
+            calculatingPrice={calculatingPrice}
             onAddItem={addNewItem}
             onRemoveItem={removeItem}
           />

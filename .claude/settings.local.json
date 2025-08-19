@@ -62,7 +62,9 @@
       "Bash(pnpm create-su:*)",
       "Bash(mongosh:*)",
       "Bash(pnpm -w run create-suAdmin)",
-      "Bash(PORT=3004 npm run dev)"
+      "Bash(PORT=3004 npm run dev)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pnpm --filter business-pwa run build)"
     ],
     "deny": []
   }
