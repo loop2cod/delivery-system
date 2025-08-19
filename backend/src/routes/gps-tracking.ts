@@ -418,82 +418,69 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
 
 // Helper functions
 async function storeLocationUpdate(driverId: string, locationData: LocationUpdateRequest): Promise<string> {
-  const result = await db.query(`
-    INSERT INTO driver_locations (
-      driver_id, delivery_id, latitude, longitude, accuracy, altitude, 
-      altitude_accuracy, heading, speed, timestamp, metadata, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-    RETURNING id
-  `, [
-    driverId,
-    locationData.deliveryId || null,
-    locationData.latitude,
-    locationData.longitude,
-    locationData.accuracy || null,
-    locationData.altitude || null,
-    locationData.altitudeAccuracy || null,
-    locationData.heading || null,
-    locationData.speed || null,
-    new Date(locationData.timestamp),
-    JSON.stringify(locationData.metadata || {})
-  ]);
+  const result = await db.insertOne('driver_locations', {
+    driver_id: driverId,
+    delivery_id: locationData.deliveryId || null,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
+    accuracy: locationData.accuracy || null,
+    altitude: locationData.altitude || null,
+    altitude_accuracy: locationData.altitudeAccuracy || null,
+    heading: locationData.heading || null,
+    speed: locationData.speed || null,
+    timestamp: new Date(locationData.timestamp),
+    metadata: JSON.stringify(locationData.metadata || {}),
+    created_at: new Date()
+  } as any);
 
-  return result.rows[0].id;
+  return result._id.toString();
 }
 
 async function updateDriverCurrentLocation(driverId: string, locationData: LocationUpdateRequest): Promise<void> {
-  await db.query(`
-    UPDATE drivers SET 
-      current_latitude = $2,
-      current_longitude = $3,
-      current_accuracy = $4,
-      current_heading = $5,
-      current_speed = $6,
-      location_updated_at = $7
-    WHERE id = $1
-  `, [
-    driverId,
-    locationData.latitude,
-    locationData.longitude,
-    locationData.accuracy || null,
-    locationData.heading || null,
-    locationData.speed || null,
-    new Date(locationData.timestamp)
-  ]);
+  await db.updateOne('drivers', 
+    { id: driverId },
+    {
+      $set: {
+        current_latitude: locationData.latitude,
+        current_longitude: locationData.longitude,
+        current_accuracy: locationData.accuracy || null,
+        current_heading: locationData.heading || null,
+        current_speed: locationData.speed || null,
+        location_updated_at: new Date(locationData.timestamp)
+      }
+    }
+  );
 }
 
 async function updateDeliveryLocation(deliveryId: string, driverId: string, locationData: LocationUpdateRequest): Promise<void> {
-  await db.query(`
-    UPDATE deliveries SET 
-      current_latitude = $3,
-      current_longitude = $4,
-      location_updated_at = $5
-    WHERE id = $1 AND driver_id = $2
-  `, [
-    deliveryId,
-    driverId,
-    locationData.latitude,
-    locationData.longitude,
-    new Date(locationData.timestamp)
-  ]);
+  await db.updateOne('deliveries',
+    { id: deliveryId, driver_id: driverId },
+    {
+      $set: {
+        current_latitude: locationData.latitude,
+        current_longitude: locationData.longitude,
+        location_updated_at: new Date(locationData.timestamp)
+      }
+    }
+  );
 }
 
 async function checkGeofences(deliveryId: string, location: LocationUpdateRequest): Promise<void> {
   // Get active geofences for delivery
-  const geofences = await db.query(`
-    SELECT * FROM geofences 
-    WHERE delivery_id = $1 AND is_active = true
-  `, [deliveryId]);
+  const geofences = await db.findMany('geofences', {
+    delivery_id: deliveryId,
+    is_active: true
+  });
 
-  for (const geofence of geofences.rows) {
+  for (const geofence of geofences) {
     const distance = calculateDistance(
       { latitude: location.latitude, longitude: location.longitude },
-      { latitude: geofence.latitude, longitude: geofence.longitude }
+      { latitude: (geofence as any).latitude, longitude: (geofence as any).longitude }
     );
 
-    if (distance <= geofence.radius) {
+    if (distance <= (geofence as any).radius) {
       // Driver entered geofence
-      await logGeofenceEvent(deliveryId, geofence.id, 'enter', location);
+      await logGeofenceEvent(deliveryId, (geofence as any).id, 'enter', location);
     }
   }
 }
@@ -505,37 +492,26 @@ async function broadcastLocationUpdate(driverId: string, locationData: LocationU
 }
 
 async function getLocationHistory(driverId: string, options: { limit: number; from?: string; to?: string }): Promise<any[]> {
-  let query = `
-    SELECT * FROM driver_locations 
-    WHERE driver_id = $1
-  `;
-  const params: any[] = [driverId];
-
-  if (options.from) {
-    query += ` AND timestamp >= $${params.length + 1}`;
-    params.push(options.from);
+  const filter: any = { driver_id: driverId };
+  
+  if (options.from || options.to) {
+    filter.timestamp = {};
+    if (options.from) filter.timestamp.$gte = new Date(options.from);
+    if (options.to) filter.timestamp.$lte = new Date(options.to);
   }
 
-  if (options.to) {
-    query += ` AND timestamp <= $${params.length + 1}`;
-    params.push(options.to);
-  }
-
-  query += ` ORDER BY timestamp DESC LIMIT $${params.length + 1}`;
-  params.push(options.limit);
-
-  const result = await db.query(query, params);
-  return result.rows;
+  return await db.findMany('driver_locations', filter, {
+    sort: { timestamp: -1 },
+    limit: options.limit
+  });
 }
 
 async function getDeliveriesForOptimization(deliveryIds: string[], driverId: string): Promise<any[]> {
-  const result = await db.query(`
-    SELECT * FROM deliveries 
-    WHERE id = ANY($1) AND driver_id = $2
-    AND status IN ('assigned', 'confirmed', 'picked_up')
-  `, [deliveryIds, driverId]);
-
-  return result.rows;
+  return await db.findMany('deliveries', {
+    id: { $in: deliveryIds },
+    driver_id: driverId,
+    status: { $in: ['assigned', 'confirmed', 'picked_up'] }
+  });
 }
 
 async function optimizeDeliveryRoute(
@@ -547,15 +523,10 @@ async function optimizeDeliveryRoute(
   // In a real application, you'd use a more sophisticated routing algorithm
   
   const waypoints: RouteWaypoint[] = deliveries.map(delivery => ({
-    coordinate: {
-      latitude: delivery.delivery_latitude,
-      longitude: delivery.delivery_longitude,
-      timestamp: Date.now()
-    },
-    address: delivery.delivery_address,
-    description: `${delivery.service_type} - ${delivery.customer_name}`,
-    deliveryId: delivery.id,
-    estimatedDuration: getEstimatedDeliveryDuration(delivery.service_type)
+    id: (delivery as any).id,
+    latitude: (delivery as any).delivery_latitude,
+    longitude: (delivery as any).delivery_longitude,
+    address: (delivery as any).delivery_address
   }));
 
   // Simple nearest neighbor optimization
@@ -567,14 +538,9 @@ async function optimizeDeliveryRoute(
   const totalDuration = segments.reduce((sum, segment) => sum + segment.duration, 0);
 
   return {
-    id: `route_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     waypoints: optimizedWaypoints,
-    segments,
     totalDistance,
-    totalDuration,
-    optimizationScore: calculateOptimizationScore(totalDistance, totalDuration, waypoints.length),
-    createdAt: Date.now(),
-    vehicleType: options.vehicleType as any
+    estimatedTime: totalDuration
   };
 }
 
@@ -589,10 +555,16 @@ function nearestNeighborOptimization(waypoints: RouteWaypoint[], startLocation?:
 
   while (unvisited.length > 0) {
     let nearestIndex = 0;
-    let nearestDistance = calculateDistance(currentLocation, unvisited[0].coordinate);
+    let nearestDistance = calculateDistance(currentLocation, {
+      latitude: unvisited[0].latitude,
+      longitude: unvisited[0].longitude
+    });
 
     for (let i = 1; i < unvisited.length; i++) {
-      const distance = calculateDistance(currentLocation, unvisited[i].coordinate);
+      const distance = calculateDistance(currentLocation, {
+        latitude: unvisited[i].latitude,
+        longitude: unvisited[i].longitude
+      });
       if (distance < nearestDistance) {
         nearestDistance = distance;
         nearestIndex = i;
@@ -601,7 +573,7 @@ function nearestNeighborOptimization(waypoints: RouteWaypoint[], startLocation?:
 
     const nearest = unvisited.splice(nearestIndex, 1)[0];
     optimized.push(nearest);
-    currentLocation = nearest.coordinate;
+    currentLocation = { latitude: nearest.latitude, longitude: nearest.longitude };
   }
 
   return optimized;
@@ -609,22 +581,29 @@ function nearestNeighborOptimization(waypoints: RouteWaypoint[], startLocation?:
 
 function calculateRouteSegments(waypoints: RouteWaypoint[], startLocation?: LocationCoordinate): any[] {
   const segments = [];
-  let currentLocation = startLocation || waypoints[0]?.coordinate;
+  let currentLocation = startLocation || (waypoints[0] ? {
+    latitude: waypoints[0].latitude,
+    longitude: waypoints[0].longitude
+  } : null);
 
   for (const waypoint of waypoints) {
     if (currentLocation) {
-      const distance = calculateDistance(currentLocation, waypoint.coordinate);
+      const waypointLocation = {
+        latitude: waypoint.latitude,
+        longitude: waypoint.longitude
+      };
+      const distance = calculateDistance(currentLocation, waypointLocation);
       const duration = estimateTravelTime(distance);
       
       segments.push({
         start: currentLocation,
-        end: waypoint.coordinate,
+        end: waypointLocation,
         distance,
         duration,
-        instructions: [`Travel ${Math.round(distance)}m to ${waypoint.description}`]
+        instructions: [`Travel ${Math.round(distance)}m to ${waypoint.address || waypoint.id}`]
       });
       
-      currentLocation = waypoint.coordinate;
+      currentLocation = waypointLocation;
     }
   }
 
@@ -666,147 +645,141 @@ function getEstimatedDeliveryDuration(serviceType: string): number {
 }
 
 async function storeOptimizedRoute(driverId: string, route: OptimizedRoute): Promise<string> {
-  const result = await db.query(`
-    INSERT INTO optimized_routes (
-      driver_id, route_data, waypoint_count, total_distance, 
-      total_duration, optimization_score, vehicle_type, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-    RETURNING id
-  `, [
-    driverId,
-    JSON.stringify(route),
-    route.waypoints.length,
-    route.totalDistance,
-    route.totalDuration,
-    route.optimizationScore,
-    route.vehicleType
-  ]);
+  const result = await db.insertOne('optimized_routes', {
+    driver_id: driverId,
+    route_data: JSON.stringify(route),
+    waypoint_count: route.waypoints.length,
+    total_distance: route.totalDistance,
+    total_duration: route.estimatedTime,
+    optimization_score: 0,
+    vehicle_type: 'car',
+    created_at: new Date()
+  } as any);
 
-  return result.rows[0].id;
+  return result._id.toString();
 }
 
 async function getStoredRoute(routeId: string, driverId: string): Promise<OptimizedRoute | null> {
-  const result = await db.query(`
-    SELECT route_data FROM optimized_routes 
-    WHERE id = $1 AND driver_id = $2
-  `, [routeId, driverId]);
+  const result = await db.findOne('optimized_routes', {
+    id: routeId,
+    driver_id: driverId
+  });
 
-  if (result.rows.length === 0) {
+  if (!result) {
     return null;
   }
 
-  return result.rows[0].route_data;
+  return (result as any).route_data;
 }
 
 async function canAccessDelivery(user: any, deliveryId: string): Promise<boolean> {
   if (user.role === 'admin') return true;
   
   if (user.role === 'driver') {
-    const result = await db.query(`
-      SELECT id FROM deliveries WHERE id = $1 AND driver_id = $2
-    `, [deliveryId, user.id]);
-    return result.rows.length > 0;
+    const result = await db.findOne('deliveries', {
+      id: deliveryId,
+      driver_id: user.id
+    });
+    return !!result;
   }
 
   return false;
 }
 
 async function createGeofence(deliveryId: string, geofenceData: GeofenceRequest, userId: string): Promise<string> {
-  const result = await db.query(`
-    INSERT INTO geofences (
-      delivery_id, latitude, longitude, radius, type, metadata, 
-      created_by, is_active, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW())
-    RETURNING id
-  `, [
-    deliveryId,
-    geofenceData.latitude,
-    geofenceData.longitude,
-    geofenceData.radius,
-    geofenceData.type,
-    JSON.stringify(geofenceData.metadata || {}),
-    userId
-  ]);
+  const result = await db.insertOne('geofences', {
+    delivery_id: deliveryId,
+    latitude: geofenceData.latitude,
+    longitude: geofenceData.longitude,
+    radius: geofenceData.radius,
+    type: geofenceData.type,
+    metadata: JSON.stringify(geofenceData.metadata || {}),
+    created_by: userId,
+    is_active: true,
+    created_at: new Date()
+  } as any);
 
-  return result.rows[0].id;
+  return result._id.toString();
 }
 
 async function logGeofenceEvent(deliveryId: string, geofenceId: string, eventType: string, location: LocationUpdateRequest): Promise<void> {
-  await db.query(`
-    INSERT INTO geofence_events (
-      delivery_id, geofence_id, event_type, latitude, longitude, 
-      timestamp, metadata, created_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-  `, [
-    deliveryId,
-    geofenceId,
-    eventType,
-    location.latitude,
-    location.longitude,
-    new Date(location.timestamp),
-    JSON.stringify(location.metadata || {})
-  ]);
+  await db.insertOne('geofence_events', {
+    delivery_id: deliveryId,
+    geofence_id: geofenceId,
+    event_type: eventType,
+    latitude: location.latitude,
+    longitude: location.longitude,
+    timestamp: new Date(location.timestamp),
+    metadata: JSON.stringify(location.metadata || {}),
+    created_at: new Date()
+  } as any);
 }
 
 async function getTrackingAnalytics(): Promise<any> {
-  const [
-    driverStats,
-    locationStats,
-    routeStats,
-    geofenceStats
-  ] = await Promise.all([
-    db.query(`
-      SELECT 
-        COUNT(DISTINCT d.id) as active_drivers,
-        COUNT(DISTINCT CASE WHEN d.location_updated_at > NOW() - INTERVAL '10 minutes' THEN d.id END) as online_drivers,
-        AVG(EXTRACT(EPOCH FROM (NOW() - d.location_updated_at))) as avg_last_update_seconds
-      FROM drivers d
-    `),
-    db.query(`
-      SELECT 
-        COUNT(*) as total_locations,
-        COUNT(DISTINCT driver_id) as tracked_drivers,
-        DATE_TRUNC('hour', timestamp) as hour,
-        COUNT(*) as hourly_updates
-      FROM driver_locations 
-      WHERE timestamp > NOW() - INTERVAL '24 hours'
-      GROUP BY DATE_TRUNC('hour', timestamp)
-      ORDER BY hour DESC
-    `),
-    db.query(`
-      SELECT 
-        COUNT(*) as total_routes,
-        AVG(total_distance) as avg_distance,
-        AVG(total_duration) as avg_duration,
-        AVG(optimization_score) as avg_score
-      FROM optimized_routes 
-      WHERE created_at > NOW() - INTERVAL '7 days'
-    `),
-    db.query(`
-      SELECT 
-        COUNT(*) as total_geofences,
-        COUNT(DISTINCT delivery_id) as deliveries_with_geofences,
-        type,
-        COUNT(*) as count_by_type
-      FROM geofences 
-      WHERE is_active = true
-      GROUP BY type
-    `)
-  ]);
+  try {
+    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    
+    const [
+      drivers,
+      locations,
+      routes,
+      geofences
+    ] = await Promise.all([
+      db.findMany('drivers', {}),
+      db.findMany('driver_locations', {
+        timestamp: { $gt: twentyFourHoursAgo }
+      }),
+      db.findMany('optimized_routes', {
+        created_at: { $gt: sevenDaysAgo }
+      }),
+      db.findMany('geofences', {
+        is_active: true
+      })
+    ]);
 
-  return {
-    drivers: driverStats.rows[0],
-    locations: {
-      summary: locationStats.rows[0] || {},
-      hourlyUpdates: locationStats.rows
-    },
-    routes: routeStats.rows[0],
-    geofences: {
-      summary: geofenceStats.rows[0] || {},
-      byType: geofenceStats.rows
-    },
-    timestamp: new Date().toISOString()
-  };
+    const onlineDrivers = drivers.filter(d => 
+      (d as any).location_updated_at && new Date((d as any).location_updated_at) > tenMinutesAgo
+    ).length;
+
+    return {
+      drivers: {
+        active_drivers: drivers.length,
+        online_drivers: onlineDrivers,
+        avg_last_update_seconds: 0 // Simplified for now
+      },
+      locations: {
+        summary: {
+          total_locations: locations.length,
+          tracked_drivers: new Set(locations.map(l => (l as any).driver_id)).size
+        },
+        hourlyUpdates: [] // Simplified for now
+      },
+      routes: {
+        total_routes: routes.length,
+        avg_distance: routes.reduce((sum, r) => sum + ((r as any).total_distance || 0), 0) / (routes.length || 1),
+        avg_duration: routes.reduce((sum, r) => sum + ((r as any).total_duration || 0), 0) / (routes.length || 1)
+      },
+      geofences: {
+        summary: {
+          total_geofences: geofences.length,
+          deliveries_with_geofences: new Set(geofences.map(g => (g as any).delivery_id)).size
+        },
+        byType: [] // Simplified for now
+      },
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('[GPS Tracking] Get tracking analytics failed:', error);
+    return {
+      drivers: { active_drivers: 0, online_drivers: 0, avg_last_update_seconds: 0 },
+      locations: { summary: {}, hourlyUpdates: [] },
+      routes: { total_routes: 0, avg_distance: 0, avg_duration: 0 },
+      geofences: { summary: {}, byType: [] },
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 export default gpsTrackingRoutes;

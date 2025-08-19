@@ -291,8 +291,8 @@ export async function setupWebSocket(fastify: FastifyInstance) {
   // Register WebSocket support
   await fastify.register(require('@fastify/websocket'));
 
-  const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  const wsManager = new WebSocketManager(redis);
+  const redisClient = redis; // Use existing redis service
+  const wsManager = new WebSocketManager(redisClient);
 
   // WebSocket route for real-time connections
   fastify.register(async function (fastify) {
@@ -317,7 +317,7 @@ export async function setupWebSocket(fastify: FastifyInstance) {
         console.log(`WebSocket client connected: ${ws.userType}_${ws.userId}`);
 
         // Handle incoming messages
-        ws.on('message', async (data) => {
+        ws.on('message', async (data: any) => {
           try {
             const message = JSON.parse(data.toString()) as WebSocketMessage;
             await handleWebSocketMessage(ws, message, wsManager);

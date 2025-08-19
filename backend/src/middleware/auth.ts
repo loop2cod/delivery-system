@@ -119,14 +119,14 @@ export async function authenticateToken(
     }
     
     // If user is from cache but missing companyId, populate it
-    if (user && user.role === UserRole.BUSINESS && !user.companyId) {
+    if (user && user.role === UserRole.BUSINESS && !(user as any).companyId) {
       try {
         const companyUser = await db.findOne('company_users', { 
           user_id: decoded.userId
         });
         
         if (companyUser) {
-          (user as any).companyId = companyUser.company_id;
+          (user as any).companyId = (companyUser as any).company_id;
           // Update cache with companyId
           try {
             await redis.set(
@@ -141,6 +141,14 @@ export async function authenticateToken(
       } catch (error) {
         // Continue without companyId if lookup fails
       }
+    }
+    
+    // Null check after cache lookup
+    if (!user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'User not found in cache'
+      });
     }
     
     if (!user) {
@@ -167,25 +175,27 @@ export async function authenticateToken(
         } as any;
 
         // For business users, get their company association
-        if (user.role === UserRole.BUSINESS) {
+        if (user && user.role === UserRole.BUSINESS) {
           const companyUser = await db.findOne('company_users', { 
             user_id: dbUser._id.toString() 
           });
           
           if (companyUser) {
-            (user as any).companyId = companyUser.company_id;
+            (user as any).companyId = (companyUser as any).company_id;
           }
         }
 
         // Cache user data
-        try {
-          await redis.set(
-            cacheUtils.keys.user(user.id),
-            user,
-            cacheUtils.ttl.MEDIUM
-          );
-        } catch (error) {
-          // Redis unavailable, continuing without cache
+        if (user) {
+          try {
+            await redis.set(
+              cacheUtils.keys.user(user.id),
+              user,
+              cacheUtils.ttl.MEDIUM
+            );
+          } catch (error) {
+            // Redis unavailable, continuing without cache
+          }
         }
       } catch (error) {
         return reply.code(401).send({
@@ -195,7 +205,14 @@ export async function authenticateToken(
       }
     }
 
-    // Check role-based access
+    // Final null check before role access
+    if (!user) {
+      return reply.code(401).send({
+        error: 'Unauthorized',
+        message: 'User not found'
+      });
+    }
+    
     const hasAccess = checkRouteAccess(url, user.role);
     if (!hasAccess) {
       logger.warn('Unauthorized access attempt', {

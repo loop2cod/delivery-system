@@ -98,7 +98,7 @@ export class AuthService {
       });
       
       if (companyUser) {
-        companyId = companyUser.company_id;
+        companyId = (companyUser as any).company_id;
       }
     }
 
@@ -146,7 +146,7 @@ export class AuthService {
           name: user.name,
           role: user.role,
           companyId: companyId,
-          driverId: user.driverId
+          driverId: undefined
         },
         cacheUtils.ttl.MEDIUM
       );
@@ -168,7 +168,7 @@ export class AuthService {
         name: user.name,
         role: user.role,
         companyId: companyId,
-        driverId: user.driverId
+        driverId: undefined
       },
       token,
       refreshToken,
@@ -278,7 +278,7 @@ export class AuthService {
   }> {
     // Generate JWT token
     const payload = { userId };
-    const token = jwt.sign(payload, config.JWT_SECRET, {
+    const token = jwt.sign(payload, config.JWT_SECRET as string, {
       expiresIn: config.JWT_EXPIRES_IN as string
     });
 

@@ -4,7 +4,7 @@ import { SocketStream } from '@fastify/websocket';
 export async function wsHandler(fastify: FastifyInstance) {
   // WebSocket connection for real-time updates
   fastify.get('/', { websocket: true }, (connection: SocketStream, req) => {
-    connection.socket.on('message', message => {
+    connection.socket.on('message', (message: any) => {
       // Echo back for now - TODO: Implement real-time features
       connection.socket.send(`Echo: ${message}`);
     });

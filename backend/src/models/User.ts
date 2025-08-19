@@ -103,9 +103,12 @@ const UserSchema = new Schema<IUser>({
     virtuals: true,
     transform: function(doc, ret) {
       ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
-      if (ret.password_hash) delete ret.password_hash;
+      if ('_id' in ret && ret._id !== undefined) delete ret._id;
+      if ('__v' in ret && ret.__v !== undefined) delete ret.__v;
+      // Use conditional deletion for optional properties
+      if ('password_hash' in ret && ret.password_hash !== undefined) delete ret.password_hash;
+      if ('password_reset_token' in ret && ret.password_reset_token !== undefined) delete ret.password_reset_token;
+      if ('email_verification_token' in ret && ret.email_verification_token !== undefined) delete ret.email_verification_token;
       return ret;
     }
   },
