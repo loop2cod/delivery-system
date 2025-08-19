@@ -15,14 +15,16 @@ import {
   IdentificationIcon,
   UserIcon,
   PencilIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
-import { Driver, formatDate } from '@/lib/api';
+import { Driver, formatDate, adminAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { clsx } from 'clsx';
+import toast from 'react-hot-toast';
 
 interface DriverModalProps {
   isOpen: boolean;
@@ -59,6 +61,7 @@ export function DriverModal({
   const [isEditing, setIsEditing] = useState(false);
   const [editableStatus, setEditableStatus] = useState<Driver['status']>('ACTIVE');
   const [editableAvailability, setEditableAvailability] = useState<Driver['availability_status']>('AVAILABLE');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   if (!driver) return null;
 
@@ -82,6 +85,21 @@ export function DriverModal({
       onUpdateAvailability(driver, editableAvailability);
     }
     setIsEditing(false);
+  };
+
+  const handleResetPassword = async () => {
+    if (!driver) return;
+    
+    setIsResettingPassword(true);
+    try {
+      const response = await adminAPI.resetDriverPassword(driver.id);
+      toast.success(`Password reset successfully! New password: ${response.newPassword}`);
+    } catch (error: any) {
+      console.error('Failed to reset password:', error);
+      toast.error(error.message || 'Failed to reset password');
+    } finally {
+      setIsResettingPassword(false);
+    }
   };
 
   return (
@@ -301,6 +319,16 @@ export function DriverModal({
                           <Button variant="outline" className="w-full" onClick={() => onViewLocation(driver)}>
                             <MapPinIcon className="h-4 w-4 mr-2" />
                             View Location
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            className="w-full" 
+                            onClick={handleResetPassword}
+                            disabled={isResettingPassword}
+                          >
+                            <KeyIcon className="h-4 w-4 mr-2" />
+                            {isResettingPassword ? 'Resetting...' : 'Reset Password'}
                           </Button>
                         </CardContent>
                       </Card>

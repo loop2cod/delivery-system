@@ -584,6 +584,16 @@ class AdminAPI {
     return response.data;
   }
 
+  async resetDriverPassword(id: string): Promise<{ message: string; newPassword: string }> {
+    const response = await api.post<{ message: string; newPassword: string }>(`/api/admin/drivers/${id}/reset-password`);
+    return response.data;
+  }
+
+  async assignRequestToDriver(driverId: string, requestId: string): Promise<{ message: string; assignment: any }> {
+    const response = await api.post<{ message: string; assignment: any }>(`/api/admin/drivers/${driverId}/assign/${requestId}`);
+    return response.data;
+  }
+
   // Staff endpoints
   async getStaff(params: {
     page?: number;

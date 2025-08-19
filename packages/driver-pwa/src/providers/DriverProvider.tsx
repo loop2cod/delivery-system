@@ -1,405 +1,287 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import axios from 'axios';
+import { toast } from 'react-hot-toast';
 
-export interface Driver {
+interface Driver {
   id: string;
   name: string;
   email: string;
   phone: string;
-  licenseNumber: string;
-  vehicle: {
-    type: string;
-    plateNumber: string;
-    model: string;
-    color: string;
-  };
-  status: 'available' | 'busy' | 'offline' | 'on_delivery';
-  currentLocation?: {
-    lat: number;
-    lng: number;
-    address: string;
-  };
+  license_number: string;
+  vehicle_type: string;
+  vehicle_plate: string;
+  status: 'AVAILABLE' | 'BUSY' | 'OFFLINE' | 'ON_BREAK';
   rating: number;
-  totalDeliveries: number;
-  activeDelivery?: string;
+  total_deliveries: number;
+  current_location?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    updated_at: string;
+  };
 }
 
-export interface Delivery {
+interface DeliveryAssignment {
   id: string;
-  trackingNumber: string;
-  serviceType: string;
-  priority: 'normal' | 'high' | 'urgent';
-  status: 'assigned' | 'picked_up' | 'in_transit' | 'delivered' | 'failed';
-  estimatedTime: string;
-  actualTime?: string;
-  customer: {
-    name: string;
-    phone: string;
-  };
-  pickup: {
+  tracking_number: string;
+  status: 'ASSIGNED' | 'IN_PROGRESS' | 'COMPLETED';
+  pickup_location: {
     address: string;
-    coordinates: { lat: number; lng: number };
-    contactName: string;
-    contactPhone: string;
-    instructions?: string;
-    scheduledTime: string;
+    latitude?: number;
+    longitude?: number;
+    contact_name?: string;
+    contact_phone?: string;
   };
-  delivery: {
+  delivery_location: {
     address: string;
-    coordinates: { lat: number; lng: number };
-    contactName: string;
-    contactPhone: string;
-    instructions?: string;
-    scheduledTime: string;
+    latitude?: number;
+    longitude?: number;
+    contact_name?: string;
+    contact_phone?: string;
   };
-  package: {
+  package_details: {
     description: string;
-    weight: number;
-    dimensions: string;
-    value: number;
-    requiresSignature: boolean;
-    fragile: boolean;
+    weight?: number;
+    dimensions?: string;
+    value?: number;
   };
-  route?: {
-    distance: number;
-    duration: number;
-    steps: Array<{
-      instruction: string;
-      distance: number;
-      duration: number;
-    }>;
-  };
-  photos?: {
-    pickup?: string[];
-    delivery?: string[];
-    signature?: string;
-  };
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
+  special_instructions?: string;
+  estimated_cost?: number;
+  estimated_delivery?: string;
+  created_at: string;
 }
 
 interface DriverContextType {
-  driver: Driver | null;
-  deliveries: Delivery[];
-  activeDelivery: Delivery | null;
-  isLoading: boolean;
+  // Auth state
   isAuthenticated: boolean;
+  isLoading: boolean;
+  
+  // Driver data
+  driver: Driver | null;
+  assignments: DeliveryAssignment[];
+  
+  // Auth methods
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  
+  // Driver methods
   updateStatus: (status: Driver['status']) => Promise<void>;
-  updateLocation: (location: { lat: number; lng: number; address: string }) => Promise<void>;
-  acceptDelivery: (deliveryId: string) => Promise<void>;
-  startDelivery: (deliveryId: string) => Promise<void>;
-  completePickup: (deliveryId: string, photos?: string[]) => Promise<void>;
-  completeDelivery: (deliveryId: string, signature?: string, photos?: string[], notes?: string) => Promise<void>;
-  markDeliveryFailed: (deliveryId: string, reason: string) => Promise<void>;
-  refreshDeliveries: () => Promise<void>;
+  updateLocation: (latitude: number, longitude: number, accuracy?: number) => Promise<void>;
+  
+  // Assignment methods
+  refreshAssignments: () => Promise<void>;
+  acceptAssignment: (assignmentId: string) => Promise<void>;
+  completeAssignment: (assignmentId: string, notes?: string, signature?: string) => Promise<void>;
 }
 
 const DriverContext = createContext<DriverContextType | undefined>(undefined);
 
-export function useDriver() {
-  const context = useContext(DriverContext);
-  if (context === undefined) {
-    throw new Error('useDriver must be used within a DriverProvider');
-  }
-  return context;
-}
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
-interface DriverProviderProps {
-  children: ReactNode;
-}
+// Configure axios defaults
+axios.defaults.baseURL = API_BASE_URL;
 
-export function DriverProvider({ children }: DriverProviderProps) {
-  const [driver, setDriver] = useState<Driver | null>(null);
-  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function DriverProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [driver, setDriver] = useState<Driver | null>(null);
+  const [assignments, setAssignments] = useState<DeliveryAssignment[]>([]);
 
-  // Initialize driver from localStorage on mount
+  // Initialize auth state
   useEffect(() => {
-    const initializeDriver = async () => {
-      try {
-        const token = localStorage.getItem('driver_token');
-        const savedDriver = localStorage.getItem('driver_data');
-        
-        if (token && savedDriver) {
-          const driverData = JSON.parse(savedDriver);
-          setDriver(driverData);
-          setIsAuthenticated(true);
-          await refreshDeliveries();
-        }
-      } catch (error) {
-        console.error('Failed to initialize driver:', error);
-        localStorage.removeItem('driver_token');
-        localStorage.removeItem('driver_data');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeDriver();
+    const token = localStorage.getItem('driver_token');
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      loadDriverProfile();
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Update active delivery when deliveries change
-  useEffect(() => {
-    if (driver?.activeDelivery) {
-      const active = deliveries.find(d => d.id === driver.activeDelivery);
-      setActiveDelivery(active || null);
-    } else {
-      setActiveDelivery(null);
+  // Load driver profile
+  const loadDriverProfile = async () => {
+    try {
+      const response = await axios.get('/driver/profile');
+      setDriver(response.data);
+      setIsAuthenticated(true);
+      await refreshAssignments();
+    } catch (error) {
+      console.error('Failed to load driver profile:', error);
+      logout();
+    } finally {
+      setIsLoading(false);
     }
-  }, [deliveries, driver?.activeDelivery]);
+  };
 
+  // Login
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsLoading(true);
       
-      // Mock login - replace with actual API call
-      const response = await fetch('/api/auth/driver/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      const response = await axios.post('/auth/login', {
+        email,
+        password,
+        pwaType: 'driver'
       });
 
-      if (response.ok) {
-        const { token, driver: driverData } = await response.json();
-        
-        localStorage.setItem('driver_token', token);
-        localStorage.setItem('driver_data', JSON.stringify(driverData));
-        
-        setDriver(driverData);
-        setIsAuthenticated(true);
-        await refreshDeliveries();
-        
-        return true;
-      }
+      const { token, user } = response.data;
       
-      return false;
-    } catch (error) {
+      // Check if user is a driver
+      if (user.role !== 'DRIVER') {
+        toast.error('Access denied. Driver account required.');
+        return false;
+      }
+
+      // Store token
+      localStorage.setItem('driver_token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      // Load driver profile
+      await loadDriverProfile();
+      
+      toast.success('Login successful!');
+      return true;
+    } catch (error: any) {
       console.error('Login failed:', error);
+      const message = error.response?.data?.message || 'Login failed';
+      toast.error(message);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Logout
   const logout = () => {
     localStorage.removeItem('driver_token');
-    localStorage.removeItem('driver_data');
-    setDriver(null);
-    setDeliveries([]);
-    setActiveDelivery(null);
+    delete axios.defaults.headers.common['Authorization'];
     setIsAuthenticated(false);
+    setDriver(null);
+    setAssignments([]);
+    toast.success('Logged out successfully');
   };
 
+  // Update driver status
   const updateStatus = async (status: Driver['status']) => {
-    if (!driver) return;
-
     try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch('/api/driver/status', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-
-      if (response.ok) {
-        const updatedDriver = { ...driver, status };
-        setDriver(updatedDriver);
-        localStorage.setItem('driver_data', JSON.stringify(updatedDriver));
-      }
-    } catch (error) {
+      await axios.put('/driver/status', { status });
+      
+      setDriver(prev => prev ? { ...prev, status } : null);
+      toast.success(`Status updated to ${status.toLowerCase()}`);
+    } catch (error: any) {
       console.error('Failed to update status:', error);
+      const message = error.response?.data?.message || 'Failed to update status';
+      toast.error(message);
     }
   };
 
-  const updateLocation = async (location: { lat: number; lng: number; address: string }) => {
-    if (!driver) return;
-
+  // Update location
+  const updateLocation = async (latitude: number, longitude: number, accuracy?: number) => {
     try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch('/api/driver/location', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ location }),
+      await axios.post('/driver/location', {
+        latitude,
+        longitude,
+        accuracy
       });
 
-      if (response.ok) {
-        const updatedDriver = { ...driver, currentLocation: location };
-        setDriver(updatedDriver);
-        localStorage.setItem('driver_data', JSON.stringify(updatedDriver));
-      }
-    } catch (error) {
+      setDriver(prev => prev ? {
+        ...prev,
+        current_location: {
+          latitude,
+          longitude,
+          accuracy,
+          updated_at: new Date().toISOString()
+        }
+      } : null);
+    } catch (error: any) {
       console.error('Failed to update location:', error);
+      // Don't show toast for location errors as they happen frequently
     }
   };
 
-  const acceptDelivery = async (deliveryId: string) => {
+  // Refresh assignments
+  const refreshAssignments = async () => {
     try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch(`/api/deliveries/${deliveryId}/accept`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        await refreshDeliveries();
-        if (driver) {
-          const updatedDriver = { ...driver, activeDelivery: deliveryId, status: 'on_delivery' as const };
-          setDriver(updatedDriver);
-          localStorage.setItem('driver_data', JSON.stringify(updatedDriver));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to accept delivery:', error);
+      const response = await axios.get('/driver/assignments');
+      setAssignments(response.data.assignments || []);
+    } catch (error: any) {
+      console.error('Failed to refresh assignments:', error);
+      // Don't show toast for background refresh errors
     }
   };
 
-  const startDelivery = async (deliveryId: string) => {
+  // Accept assignment
+  const acceptAssignment = async (assignmentId: string) => {
     try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch(`/api/deliveries/${deliveryId}/start`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      await axios.post(`/driver/assignments/${assignmentId}/accept`);
+      
+      // Update assignment status locally
+      setAssignments(prev => prev.map(assignment => 
+        assignment.id === assignmentId 
+          ? { ...assignment, status: 'IN_PROGRESS' as const }
+          : assignment
+      ));
 
-      if (response.ok) {
-        await refreshDeliveries();
-      }
-    } catch (error) {
-      console.error('Failed to start delivery:', error);
+      // Update driver status to busy
+      setDriver(prev => prev ? { ...prev, status: 'BUSY' } : null);
+      
+      toast.success('Assignment accepted!');
+    } catch (error: any) {
+      console.error('Failed to accept assignment:', error);
+      const message = error.response?.data?.message || 'Failed to accept assignment';
+      toast.error(message);
     }
   };
 
-  const completePickup = async (deliveryId: string, photos?: string[]) => {
+  // Complete assignment
+  const completeAssignment = async (assignmentId: string, notes?: string, signature?: string) => {
     try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch(`/api/deliveries/${deliveryId}/pickup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ photos }),
+      await axios.post(`/driver/assignments/${assignmentId}/complete`, {
+        delivery_notes: notes,
+        recipient_signature: signature
       });
+      
+      // Remove completed assignment from list
+      setAssignments(prev => prev.filter(assignment => assignment.id !== assignmentId));
 
-      if (response.ok) {
-        await refreshDeliveries();
-      }
-    } catch (error) {
-      console.error('Failed to complete pickup:', error);
-    }
-  };
-
-  const completeDelivery = async (deliveryId: string, signature?: string, photos?: string[], notes?: string) => {
-    try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch(`/api/deliveries/${deliveryId}/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ signature, photos, notes }),
-      });
-
-      if (response.ok) {
-        await refreshDeliveries();
-        if (driver) {
-          const updatedDriver = { 
-            ...driver, 
-            activeDelivery: undefined, 
-            status: 'available' as const,
-            totalDeliveries: driver.totalDeliveries + 1
-          };
-          setDriver(updatedDriver);
-          localStorage.setItem('driver_data', JSON.stringify(updatedDriver));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to complete delivery:', error);
-    }
-  };
-
-  const markDeliveryFailed = async (deliveryId: string, reason: string) => {
-    try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch(`/api/deliveries/${deliveryId}/fail`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ reason }),
-      });
-
-      if (response.ok) {
-        await refreshDeliveries();
-        if (driver) {
-          const updatedDriver = { 
-            ...driver, 
-            activeDelivery: undefined, 
-            status: 'available' as const
-          };
-          setDriver(updatedDriver);
-          localStorage.setItem('driver_data', JSON.stringify(updatedDriver));
-        }
-      }
-    } catch (error) {
-      console.error('Failed to mark delivery as failed:', error);
-    }
-  };
-
-  const refreshDeliveries = async () => {
-    try {
-      const token = localStorage.getItem('driver_token');
-      const response = await fetch('/api/driver/deliveries', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const deliveriesData = await response.json();
-        setDeliveries(deliveriesData);
-      }
-    } catch (error) {
-      console.error('Failed to refresh deliveries:', error);
+      // Update driver status to available and increment deliveries
+      setDriver(prev => prev ? { 
+        ...prev, 
+        status: 'AVAILABLE',
+        total_deliveries: prev.total_deliveries + 1
+      } : null);
+      
+      toast.success('Delivery completed!');
+    } catch (error: any) {
+      console.error('Failed to complete assignment:', error);
+      const message = error.response?.data?.message || 'Failed to complete delivery';
+      toast.error(message);
     }
   };
 
   const value: DriverContextType = {
-    driver,
-    deliveries,
-    activeDelivery,
-    isLoading,
+    // Auth state
     isAuthenticated,
+    isLoading,
+    
+    // Driver data
+    driver,
+    assignments,
+    
+    // Auth methods
     login,
     logout,
+    
+    // Driver methods
     updateStatus,
     updateLocation,
-    acceptDelivery,
-    startDelivery,
-    completePickup,
-    completeDelivery,
-    markDeliveryFailed,
-    refreshDeliveries,
+    
+    // Assignment methods
+    refreshAssignments,
+    acceptAssignment,
+    completeAssignment
   };
 
   return (
@@ -407,4 +289,12 @@ export function DriverProvider({ children }: DriverProviderProps) {
       {children}
     </DriverContext.Provider>
   );
+}
+
+export function useDriver() {
+  const context = useContext(DriverContext);
+  if (context === undefined) {
+    throw new Error('useDriver must be used within a DriverProvider');
+  }
+  return context;
 }

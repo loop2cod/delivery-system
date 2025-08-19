@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { Toaster } from 'react-hot-toast';
 import './globals.css';
 import { DriverProvider } from '@/providers/DriverProvider';
 import { PWAProvider } from '@/providers/PWAProvider';
@@ -53,6 +54,16 @@ export default function RootLayout({
           <LocationProvider>
             <DriverProvider>
               {children}
+              <Toaster 
+                position="top-center"
+                toastOptions={{
+                  duration: 3000,
+                  style: {
+                    background: '#363636',
+                    color: '#fff',
+                  },
+                }}
+              />
             </DriverProvider>
           </LocationProvider>
         </PWAProvider>

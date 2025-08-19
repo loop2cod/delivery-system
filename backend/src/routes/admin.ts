@@ -918,6 +918,131 @@ export async function adminRoutes(fastify: FastifyInstance) {
     return result;
   }));
 
+  // Reset password for driver
+  fastify.post('/drivers/:id/reset-password', {
+    schema: {
+      description: 'Reset password for driver',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }
+        },
+        required: ['id']
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            newPassword: { type: 'string' }
+          }
+        }
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    // Find the driver first
+    const driver = await db.findOne('drivers', { _id: new ObjectId(id) });
+
+    if (!driver) {
+      return reply.code(404).send({
+        error: 'Driver not found',
+        message: 'Driver not found'
+      });
+    }
+
+    // Find the user associated with this driver
+    const user = await db.findOne('users', {
+      _id: driver.user_id,
+      role: 'DRIVER'
+    });
+
+    if (!user) {
+      return reply.code(404).send({
+        error: 'Driver user not found',
+        message: 'No user account found for this driver'
+      });
+    }
+
+    // Generate a new temporary password (16 characters)
+    const newPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password
+    await db.updateOne('users',
+      { _id: user._id },
+      { $set: { password_hash: hashedPassword, updated_at: new Date() } }
+    );
+
+    // Log the action (in production, this should be logged properly and the password should be sent via email)
+    console.log(`Password reset for driver ${user.email} (${driver.name || user.name}). New password: ${newPassword}`);
+
+    return {
+      message: `Password reset successfully for ${driver.name || user.name} (${user.email})`,
+      newPassword: newPassword
+    };
+  }));
+
+  // Assign delivery request to driver
+  fastify.post('/drivers/:driverId/assign/:requestId', {
+    schema: {
+      description: 'Assign delivery request to driver',
+      tags: ['Admin'],
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        properties: {
+          driverId: { type: 'string' },
+          requestId: { type: 'string' }
+        },
+        required: ['driverId', 'requestId']
+      }
+    }
+  }, asyncHandler(async (request, reply) => {
+    const { driverId, requestId } = request.params as { driverId: string; requestId: string };
+
+    // Find the driver
+    const driver = await db.findOne('drivers', { _id: new ObjectId(driverId) });
+    if (!driver) {
+      return reply.code(404).send({ error: 'Driver not found' });
+    }
+
+    // Find the delivery request
+    const deliveryRequest = await db.findOne('delivery_requests', { _id: new ObjectId(requestId) });
+    if (!deliveryRequest) {
+      return reply.code(404).send({ error: 'Delivery request not found' });
+    }
+
+    // Check if request is already assigned
+    if (deliveryRequest.status !== 'PENDING') {
+      return reply.code(400).send({ error: 'Delivery request is not available for assignment' });
+    }
+
+    // Assign the request to the driver
+    const updatedRequest = await db.updateOne('delivery_requests',
+      { _id: new ObjectId(requestId) },
+      { 
+        $set: { 
+          assigned_driver_id: new ObjectId(driverId),
+          status: 'ASSIGNED',
+          updated_at: new Date()
+        }
+      }
+    );
+
+    return {
+      message: 'Delivery request assigned successfully',
+      assignment: {
+        driver_id: driverId,
+        request_id: requestId,
+        status: 'ASSIGNED'
+      }
+    };
+  }));
+
   // Create new inquiry (admin can create inquiries on behalf of customers)
   fastify.post('/inquiries', {
     schema: {
