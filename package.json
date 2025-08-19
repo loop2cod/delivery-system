@@ -3,10 +3,6 @@
   "version": "1.0.0",
   "description": "Comprehensive UAE Delivery Management System with 4 Progressive Web Applications",
   "private": true,
-  "workspaces": [
-    "packages/*",
-    "backend"
-  ],
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
