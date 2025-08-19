@@ -62,7 +62,38 @@ check_prerequisites() {
         error "Git is not installed. Please install Git first."
     fi
     
+    # Check if ports 80 and 443 are available
+    check_port_availability
+    
     log "Prerequisites check completed successfully"
+}
+
+# Check port availability
+check_port_availability() {
+    log "Checking port availability..."
+    
+    # Check port 80
+    if lsof -i :80 >/dev/null 2>&1; then
+        warning "Port 80 is in use by another process"
+        info "Run './scripts/fix-port-conflict.sh' to resolve this issue"
+        
+        read -p "Do you want to continue with alternative ports? (y/N): " continue_alt
+        if [[ "$continue_alt" =~ ^[Yy]$ ]]; then
+            USE_ALT_PORTS=true
+            log "Will use alternative ports (8080/8443)"
+        else
+            error "Please resolve port conflicts first by running: ./scripts/fix-port-conflict.sh"
+        fi
+    fi
+    
+    # Check port 443
+    if lsof -i :443 >/dev/null 2>&1; then
+        warning "Port 443 is in use by another process"
+        if [[ "$USE_ALT_PORTS" != "true" ]]; then
+            info "Run './scripts/fix-port-conflict.sh' to resolve this issue"
+            error "Please resolve port conflicts first"
+        fi
+    fi
 }
 
 # Create backup
@@ -123,7 +154,25 @@ build_and_deploy() {
     
     # Start services
     log "Starting services..."
-    docker-compose up -d
+    if [[ "$USE_ALT_PORTS" == "true" ]]; then
+        # Create alternative ports file if it doesn't exist
+        if [[ ! -f docker-compose.alt-ports.yml ]]; then
+            cat > docker-compose.alt-ports.yml << 'EOF'
+version: '3.8'
+services:
+  nginx:
+    ports:
+      - "8080:80"
+      - "8443:443"
+EOF
+        fi
+        docker-compose -f docker-compose.yml -f docker-compose.alt-ports.yml up -d
+        info "Application deployed on alternative ports:"
+        info "  - HTTP: http://your-server-ip:8080"
+        info "  - HTTPS: https://your-server-ip:8443"
+    else
+        docker-compose up -d
+    fi
     
     # Wait for services to be ready
     log "Waiting for services to be ready..."
