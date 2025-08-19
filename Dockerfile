@@ -11,9 +11,9 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY turbo.json ./
 
-# Copy all package.json files
-COPY backend/package.json ./backend/
-COPY packages/*/package.json ./packages/*/
+# Copy all package.json files (preserve paths to avoid duplicates)
+COPY backend/package.json backend/package.json
+COPY packages/*/package.json packages/*/package.json
 
 # Allow toggling lockfile strictness at build time (defaults to strict)
 ARG PNPM_FLAGS="--frozen-lockfile"
