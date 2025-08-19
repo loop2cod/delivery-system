@@ -1,8 +1,8 @@
 # Multi-stage Dockerfile for UAE Delivery Management System
 FROM node:18-alpine AS base
 
-# Install pnpm
-RUN npm install -g pnpm
+# Install pnpm (pin to project version for lockfile compatibility)
+RUN npm install -g pnpm@8.6.10
 
 # Set working directory
 WORKDIR /app
