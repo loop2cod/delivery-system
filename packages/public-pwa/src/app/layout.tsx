@@ -3,6 +3,7 @@ import { Metadata, Viewport } from 'next';
 import './globals.css';
 import { PWAProvider } from '@/components/providers/PWAProvider';
 import { NotificationProvider } from '@/components/providers/NotificationProvider';
+import { Toaster } from '@/components/ui/toaster';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -99,6 +100,7 @@ export default function RootLayout({
             <div className="flex min-h-screen flex-col">
               {children}
             </div>
+            <Toaster />
           </NotificationProvider>
         </PWAProvider>
       </body>

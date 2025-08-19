@@ -64,7 +64,11 @@
       "Bash(pnpm -w run create-suAdmin)",
       "Bash(PORT=3004 npm run dev)",
       "mcp__ide__getDiagnostics",
-      "Bash(pnpm --filter business-pwa run build)"
+      "Bash(pnpm --filter business-pwa run build)",
+      "Bash(pnpm --filter admin-pwa run build)",
+      "Bash(pnpm --filter admin-pwa exec tsc --noEmit --skipLibCheck)",
+      "Bash(pnpm exec tsc:*)",
+      "Bash(pnpm list:*)"
     ],
     "deny": []
   }

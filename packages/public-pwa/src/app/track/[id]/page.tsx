@@ -3,7 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 // import QRCodeScanner from '@delivery-uae/shared/components/QRCodeScanner';
-import { QRCodeData } from '@delivery-uae/shared';
+
+interface QRCodeData {
+  id: string;
+  text: string;
+  format: string;
+}
 
 interface TrackingInfo {
   id: string;

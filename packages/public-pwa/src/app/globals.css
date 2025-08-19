@@ -26,7 +26,7 @@
   --destructive-foreground: #ffffff;
   
   /* PWA UI Colors */
-  --background: #ffffff;
+  --background: #fefefe;
   --foreground: var(--uae-navy);
   --card: #ffffff;
   --card-foreground: var(--uae-navy);

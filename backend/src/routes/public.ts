@@ -6,7 +6,6 @@ import { redis, cacheUtils } from '../config/redis';
 import { asyncHandler, ValidationError, NotFoundError } from '../middleware/errorHandler';
 import { logger, pwaLogger } from '../utils/logger';
 import { 
-  generateInquiryReference, 
   calculateDeliveryPrice, 
   getEstimatedDeliveryTime,
   isValidEmail,
@@ -58,33 +57,35 @@ export async function publicRoutes(fastify: FastifyInstance) {
       throw new ValidationError('Invalid UAE phone number');
     }
 
-    // Generate reference number
-    const referenceNumber = generateInquiryReference();
+    // Generate proper reference number (same as admin)
+    const currentYear = new Date().getFullYear();
+    const startOfYear = new Date(currentYear, 0, 1);
+    const endOfYear = new Date(currentYear + 1, 0, 1);
+    const countResult = await db.count('inquiries', {
+      created_at: { $gte: startOfYear, $lt: endOfYear }
+    });
+    const sequenceNumber = (countResult + 1).toString().padStart(4, '0');
+    const referenceNumber = `INQ-${currentYear}-${sequenceNumber}`;
 
-    // Insert inquiry
-    const inquiry = await db.queryOne(`
-      INSERT INTO inquiries (
-        reference_number, company_name, industry, contact_person, 
-        email, phone, expected_volume, service_type, special_requirements, status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, reference_number, created_at
-    `, [
-      referenceNumber,
-      inquiryData.companyName,
-      inquiryData.industry,
-      inquiryData.contactPerson,
-      inquiryData.email,
-      inquiryData.phone,
-      inquiryData.expectedVolume,
-      inquiryData.serviceType,
-      inquiryData.specialRequirements || null,
-      InquiryStatus.NEW
-    ]);
+    // Insert inquiry using the same structure as admin
+    const inquiryDoc = {
+      reference_number: referenceNumber,
+      company_name: inquiryData.companyName,
+      industry: inquiryData.industry,
+      contact_person: inquiryData.contactPerson,
+      email: inquiryData.email,
+      phone: inquiryData.phone,
+      expected_volume: inquiryData.expectedVolume,
+      service_type: inquiryData.serviceType || 'General Delivery',
+      special_requirements: inquiryData.specialRequirements || null,
+      status: InquiryStatus.NEW
+    };
+
+    const inquiry = await db.insertOne('inquiries', inquiryDoc);
 
     // Log business event
     pwaLogger.businessEvent('INQUIRY_SUBMITTED', 'anonymous', {
-      inquiryId: inquiry.id,
+      inquiryId: inquiry._id.toString(),
       referenceNumber: inquiry.reference_number,
       companyName: inquiryData.companyName
     });
@@ -94,7 +95,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
 
     reply.code(201);
     return {
-      id: inquiry.id,
+      id: inquiry._id.toString(),
       referenceNumber: inquiry.reference_number,
       message: 'Inquiry submitted successfully',
       estimatedResponseTime: '4 business hours'
@@ -135,17 +136,17 @@ export async function publicRoutes(fastify: FastifyInstance) {
     let inquiry = await redis.get(cacheKey, true);
 
     if (!inquiry) {
-      // Fetch from database
-      inquiry = await db.queryOne(`
-        SELECT i.reference_number, i.status, i.company_name, i.created_at,
-               u.name as assigned_staff_name
-        FROM inquiries i
-        LEFT JOIN users u ON i.assigned_staff_id = u.id
-        WHERE i.reference_number = $1
-      `, [referenceNumber]);
+      // Fetch from database using the reference_number field
+      inquiry = await db.findOne('inquiries', { reference_number: referenceNumber });
 
       if (!inquiry) {
         throw new NotFoundError('Inquiry not found');
+      }
+
+      // Get assigned staff info if exists
+      if (inquiry.reviewed_by) {
+        const staff = await db.findOne('users', { _id: inquiry.reviewed_by });
+        inquiry.assigned_staff_name = staff?.name || null;
       }
 
       // Cache for 5 minutes
@@ -208,33 +209,28 @@ export async function publicRoutes(fastify: FastifyInstance) {
     let packageData = await redis.get(cacheKey, true);
 
     if (!packageData) {
-      // Fetch from database
-      const packageQuery = `
-        SELECT p.package_code, p.status, p.recipient_name,
-               dr.pickup_area || ', ' || dr.pickup_city as from_address,
-               p.delivery_area || ', ' || p.delivery_city as to_address,
-               CASE 
-                 WHEN p.status = 'DELIVERED' THEN p.delivered_at
-                 ELSE NULL
-               END as delivered_at
-        FROM packages p
-        JOIN delivery_requests dr ON p.request_id = dr.id
-        WHERE p.package_code = $1
-      `;
-
-      packageData = await db.queryOne(packageQuery, [packageCode]);
+      // Fetch from database using MongoDB
+      packageData = await db.findOne('packages', { package_code: packageCode });
 
       if (!packageData) {
         throw new NotFoundError('Package not found');
       }
 
+      // Get delivery request info
+      if (packageData.request_id) {
+        const deliveryRequest = await db.findOne('delivery_requests', { _id: packageData.request_id });
+        if (deliveryRequest) {
+          packageData.from_address = `${deliveryRequest.pickup_area}, ${deliveryRequest.pickup_city}`;
+        }
+      }
+
+      packageData.to_address = `${packageData.delivery_area}, ${packageData.delivery_city}`;
+
       // Get timeline
-      const timeline = await db.queryMany(`
-        SELECT status, timestamp, location_name, notes
-        FROM package_timeline
-        WHERE package_id = (SELECT id FROM packages WHERE package_code = $1)
-        ORDER BY timestamp ASC
-      `, [packageCode]);
+      const timeline = await db.findMany('package_timeline', 
+        { package_id: packageData._id },
+        { sort: { timestamp: 1 } }
+      );
 
       packageData.timeline = timeline.map(t => ({
         status: t.status,

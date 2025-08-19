@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { RequestsTable } from '@/components/requests/RequestsTable';
-import { RequestModal } from '@/components/requests/RequestModal';
 import { AssignDriverModal } from '@/components/requests/AssignDriverModal';
 import { adminAPI, DeliveryRequest, Driver } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -28,9 +27,8 @@ export default function RequestsPage() {
     dateTo: ''
   });
 
-  // Modals
+  // Modals (only for assign driver, removed view modal)
   const [selectedRequest, setSelectedRequest] = useState<DeliveryRequest | null>(null);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
 
@@ -84,16 +82,7 @@ export default function RequestsPage() {
     fetchRequests(page);
   };
 
-  // Handle request actions
-  const handleViewRequest = async (requestId: string) => {
-    try {
-      const response = await adminAPI.getDeliveryRequest(requestId);
-      setSelectedRequest(response.request);
-      setIsViewModalOpen(true);
-    } catch (error) {
-      toast.error('Failed to load request details');
-    }
-  };
+  // Handle request actions (removed handleViewRequest since we're using detail page now)
 
   const handleAssignDriver = (request: DeliveryRequest) => {
     setSelectedRequest(request);
@@ -170,16 +159,8 @@ export default function RequestsPage() {
           onFilterChange={handleFilterChange}
           onClearFilters={handleClearFilters}
           onPageChange={handlePageChange}
-          onViewRequest={handleViewRequest}
+          onViewRequest={() => {}} // Not used anymore, navigation handled in table
           onAssignDriver={handleAssignDriver}
-          onStatusUpdate={handleStatusUpdate}
-        />
-
-        {/* Request Detail Modal */}
-        <RequestModal
-          isOpen={isViewModalOpen}
-          onClose={() => setIsViewModalOpen(false)}
-          request={selectedRequest}
           onStatusUpdate={handleStatusUpdate}
         />
 

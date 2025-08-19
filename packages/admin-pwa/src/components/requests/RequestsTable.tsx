@@ -12,6 +12,7 @@ import {
   CalendarIcon,
   ClockIcon
 } from '@heroicons/react/24/outline';
+import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,6 +77,7 @@ export function RequestsTable({
   onStatusUpdate
 }: RequestsTableProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const router = useRouter();
 
   const hasActiveFilters = Object.values(filters).some(value => value !== '');
 
@@ -380,8 +382,9 @@ export function RequestsTable({
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => onViewRequest(request.id)}
+                            onClick={() => router.push(`/requests/${request.id}`)}
                             className="text-xs"
+                            title="View Details"
                           >
                             <EyeIcon className="h-4 w-4" />
                           </Button>
