@@ -69,7 +69,7 @@ export async function errorHandler(
     requestId,
     ip,
     userAgent: request.headers['user-agent'],
-    userId: request.user?.id
+    userId: request.currentUser?.id
   });
 
   // Determine status code and error type

@@ -69,7 +69,7 @@ export async function qrRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: QRGenerationRequest }>, reply: FastifyReply) => {
     try {
       const { type, id, metadata = {}, options = {} } = request.body;
-      const user = request.user as any;
+      const user = request.currentUser as any;
 
       // Validate access permissions
       if (!await validateQRAccess(user, type, id)) {
@@ -167,7 +167,7 @@ export async function qrRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: BatchQRRequest }>, reply: FastifyReply) => {
     try {
       const { items, options = {} } = request.body;
-      const user = request.user as any;
+      const user = request.currentUser as any;
 
       // Validate access for all items
       for (const item of items) {
@@ -239,7 +239,7 @@ export async function qrRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Body: QRScanRequest }>, reply: FastifyReply) => {
     try {
       const { content, scannerId, location } = request.body;
-      const user = request.user as any;
+      const user = request.currentUser as any;
 
       // Parse QR code content
       const qrData = qrManager.parseQRData(content);
@@ -351,7 +351,7 @@ export async function qrRoutes(fastify: FastifyInstance) {
     preHandler: [authenticateToken]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       
       // Only admin and business users can view QR history
       if (!['admin', 'business'].includes(user.role)) {
@@ -382,7 +382,7 @@ export async function qrRoutes(fastify: FastifyInstance) {
     preHandler: [authenticateToken]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       
       // Only admin users can view QR analytics
       if (user.role !== 'admin') {

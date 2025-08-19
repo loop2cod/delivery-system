@@ -68,7 +68,13 @@
       "Bash(pnpm --filter admin-pwa run build)",
       "Bash(pnpm --filter admin-pwa exec tsc --noEmit --skipLibCheck)",
       "Bash(pnpm exec tsc:*)",
-      "Bash(pnpm list:*)"
+      "Bash(pnpm list:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(sed:*)",
+      "Bash(timeout 60s pnpm run build)",
+      "Bash(for:*)",
+      "Bash(do sed -i '' 's/request\\.user/request.currentUser/g' \"$file\")",
+      "Bash(done)"
     ],
     "deny": []
   }

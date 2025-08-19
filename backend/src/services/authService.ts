@@ -279,7 +279,7 @@ export class AuthService {
     // Generate JWT token
     const payload = { userId };
     const token = jwt.sign(payload, config.JWT_SECRET, {
-      expiresIn: config.JWT_EXPIRES_IN
+      expiresIn: config.JWT_EXPIRES_IN as string
     });
 
     // Generate refresh token
@@ -467,7 +467,7 @@ export class AuthService {
       const keys = await redis.keys('session:*');
       for (const key of keys) {
         const sessionData = await redis.get(key, true);
-        if (sessionData && sessionData.refreshToken === refreshToken) {
+        if (sessionData && (sessionData as any).refreshToken === refreshToken) {
           session = sessionData;
           break;
         }
@@ -481,7 +481,7 @@ export class AuthService {
     }
 
     // Get user
-    const user = await User.findById(session.userId).lean();
+    const user = await User.findById((session as any).userId).lean();
     if (!user) {
       throw new ValidationError('User not found');
     }
@@ -521,7 +521,7 @@ export class AuthService {
       const keys = await redis.keys('session:*');
       for (const key of keys) {
         const sessionData = await redis.get(key, true);
-        if (sessionData && sessionData.userId === userId) {
+        if (sessionData && (sessionData as any).userId === userId) {
           await redis.del(key);
         }
       }

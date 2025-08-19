@@ -82,10 +82,10 @@ const DriverSchema = new Schema<IDriver>({
     type: Boolean,
     default: false
   },
-  documents: {
-    type: [Schema.Types.Mixed],
-    default: []
-  },
+  documents: [{
+    type: Schema.Types.Mixed,
+    default: undefined
+  }],
   emergency_contact: {
     type: Schema.Types.Mixed
   },
@@ -102,7 +102,7 @@ const DriverSchema = new Schema<IDriver>({
   toJSON: { 
     virtuals: true,
     transform: function(doc, ret) {
-      ret.id = ret._id;
+      ret.id = ret._id.toString();
       delete ret._id;
       delete ret.__v;
       return ret;
@@ -116,7 +116,7 @@ DriverSchema.index({ status: 1 });
 DriverSchema.index({ is_verified: 1 });
 
 // Virtual for id
-DriverSchema.virtual('id').get(function() {
+DriverSchema.virtual('id').get(function(this: any) {
   return this._id.toHexString();
 });
 

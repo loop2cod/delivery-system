@@ -207,7 +207,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request, reply) => {
     const { id } = request.params as any;
     const updates = request.body as any;
-    const adminId = request.user!.id;
+    const adminId = request.currentUser!.id;
 
     // Get the current inquiry details
     const currentInquiry = await db.findOne('inquiries', { _id: new ObjectId(id) });
@@ -1077,7 +1077,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   }, asyncHandler(async (request, reply) => {
     const inquiryData = request.body as any;
-    const adminId = request.user!.id;
+    const adminId = request.currentUser!.id;
 
     // Generate reference number
     const currentYear = new Date().getFullYear();
@@ -1229,7 +1229,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   }, asyncHandler(async (request, reply) => {
     const { inquiry_ids, action, notes } = request.body as any;
-    const adminId = request.user!.id;
+    const adminId = request.currentUser!.id;
 
     // Handle company conversion for approve action
     if (action === 'approve') {

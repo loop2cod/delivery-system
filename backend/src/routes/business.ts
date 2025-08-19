@@ -16,7 +16,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
 
   // Business dashboard
   fastify.get('/dashboard', async (request, reply) => {
-    const user:any = request.user;
+    const user:any = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -225,7 +225,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -321,7 +321,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -380,7 +380,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
 
   // Get single delivery request
   fastify.get('/requests/:id', async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -413,7 +413,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
 
   // Get company profile
   fastify.get('/profile', async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -462,7 +462,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -507,7 +507,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
 
   // Get company pricing
   fastify.get('/pricing', async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -565,7 +565,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const user = request.user;
+    const user = request.currentUser;
     if (!user?.companyId) {
       return reply.code(400).send({ error: 'No company associated with user' });
     }
@@ -700,7 +700,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    const user:any = request.user;
+    const user:any = request.currentUser;
     if (!user?.id) {
       return reply.code(400).send({ error: 'User not found' });
     }

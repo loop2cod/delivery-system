@@ -2,8 +2,22 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { db } from '../config/database';
 import { authenticateToken } from '../middleware/auth';
-// Temporary direct import until shared module build issues are resolved
-import { LocationCoordinate, OptimizedRoute, RouteWaypoint } from '../../shared/src/location-services';
+// Define types locally until shared module is available
+interface LocationCoordinate {
+  latitude: number;
+  longitude: number;
+}
+
+interface RouteWaypoint extends LocationCoordinate {
+  id: string;
+  address?: string;
+}
+
+interface OptimizedRoute {
+  waypoints: RouteWaypoint[];
+  totalDistance: number;
+  estimatedTime: number;
+}
 
 interface LocationUpdateRequest {
   deliveryId?: string;
@@ -66,7 +80,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Body: LocationUpdateRequest }>, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       const locationData = request.body;
 
       // Validate driver role
@@ -143,7 +157,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Body: BatchLocationRequest }>, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       const { deliveryId, locations, metadata } = request.body;
 
       if (user.role !== 'driver') {
@@ -189,7 +203,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     preHandler: [authenticateToken]
   }, async (request: FastifyRequest<{ Params: { driverId: string }; Querystring: { limit?: number; from?: string; to?: string } }>, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       const { driverId } = request.params;
       const { limit = 100, from, to } = request.query;
 
@@ -249,7 +263,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Body: RouteOptimizationRequest }>, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       const { deliveryIds, startLocation, vehicleType = 'car', optimizationType = 'time', maxStops = 10 } = request.body;
 
       // Validate driver permissions
@@ -301,7 +315,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { routeId: string } }>, reply: FastifyReply) => {
     try {
       const { routeId } = request.params;
-      const user = request.user as any;
+      const user = request.currentUser as any;
 
       const route = await getStoredRoute(routeId, user.id);
 
@@ -344,7 +358,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest<{ Params: { deliveryId: string }; Body: GeofenceRequest }>, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
       const { deliveryId } = request.params;
       const geofenceData = request.body;
 
@@ -377,7 +391,7 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
     preHandler: [authenticateToken]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const user = request.user as any;
+      const user = request.currentUser as any;
 
       if (user.role !== 'admin') {
         return reply.status(403).send({

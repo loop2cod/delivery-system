@@ -95,10 +95,10 @@ const InquirySchema = new Schema<IInquiry>({
     type: String,
     trim: true
   },
-  documents: {
-    type: [Schema.Types.Mixed],
-    default: []
-  },
+  documents: [{
+    type: Schema.Types.Mixed,
+    default: undefined
+  }],
   created_at: {
     type: Date,
     default: Date.now
@@ -119,7 +119,7 @@ const InquirySchema = new Schema<IInquiry>({
   toJSON: { 
     virtuals: true,
     transform: function(doc, ret) {
-      ret.id = ret._id;
+      ret.id = ret._id.toString();
       delete ret._id;
       delete ret.__v;
       return ret;
@@ -135,7 +135,7 @@ InquirySchema.index({ company_name: 1 });
 InquirySchema.index({ created_at: -1 });
 
 // Virtual for id
-InquirySchema.virtual('id').get(function() {
+InquirySchema.virtual('id').get(function(this: any) {
   return this._id.toHexString();
 });
 

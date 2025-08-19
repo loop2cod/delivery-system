@@ -1,14 +1,15 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { UserRole } from '../models/User';
+import { UserRole, IUser } from '../models/User';
 import { cacheUtils, redis } from '../config/redis';
 import { User } from '../models/User';
 import { logger } from '../utils/logger';
 import { db } from '../config/database';
+import mongoose from 'mongoose';
 
 // Extend Fastify request interface
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: {
+    currentUser?: {
       id: string;
       email: string;
       name: string;
@@ -106,9 +107,13 @@ export async function authenticateToken(
     }
 
     // Get user data from cache or database
-    let user = null;
+    let user: IUser | null = null;
+    let cachedUser: any = null;
     try {
-      user = await redis.get(cacheUtils.keys.user(decoded.userId), true);
+      cachedUser = await redis.get(cacheUtils.keys.user(decoded.userId), true);
+      if (cachedUser && typeof cachedUser === 'object') {
+        user = cachedUser as IUser;
+      }
     } catch (error) {
       // Redis unavailable, will fetch from database
     }
@@ -121,11 +126,11 @@ export async function authenticateToken(
         });
         
         if (companyUser) {
-          user.companyId = companyUser.company_id;
+          (user as any).companyId = companyUser.company_id;
           // Update cache with companyId
           try {
             await redis.set(
-              cacheUtils.keys.user(user.id),
+              cacheUtils.keys.user((user as any).id),
               user,
               cacheUtils.ttl.MEDIUM
             );
@@ -141,23 +146,34 @@ export async function authenticateToken(
     if (!user) {
       // User not in cache, fetch from database
       try {
-        user = await User.findById(decoded.userId).select('-password_hash');
+        const dbUser = await User.findById(decoded.userId).select('-password_hash');
         
-        if (!user || user.status !== 'ACTIVE') {
+        if (!dbUser || dbUser.status !== 'ACTIVE') {
           return reply.code(401).send({
             error: 'Unauthorized',
             message: 'User not found or inactive'
           });
         }
 
+        // Convert to plain object to avoid Mongoose issues
+        user = {
+          id: dbUser._id.toString(),
+          email: dbUser.email,
+          name: dbUser.name,
+          role: dbUser.role,
+          status: dbUser.status,
+          companyId: undefined,
+          driverId: undefined
+        } as any;
+
         // For business users, get their company association
         if (user.role === UserRole.BUSINESS) {
           const companyUser = await db.findOne('company_users', { 
-            user_id: user._id.toString() 
+            user_id: dbUser._id.toString() 
           });
           
           if (companyUser) {
-            user.companyId = companyUser.company_id;
+            (user as any).companyId = companyUser.company_id;
           }
         }
 
@@ -183,7 +199,7 @@ export async function authenticateToken(
     const hasAccess = checkRouteAccess(url, user.role);
     if (!hasAccess) {
       logger.warn('Unauthorized access attempt', {
-        userId: user.id,
+        userId: (user as any).id,
         role: user.role,
         route: url,
         method
@@ -196,13 +212,13 @@ export async function authenticateToken(
     }
 
     // Attach user to request
-    request.user = {
-      id: user.id,
-      email: user.email,
-      name: user.name,  
+    request.currentUser = {
+      id: (user as any).id,
+      email: (user as any).email,
+      name: (user as any).name,  
       role: user.role,
-      companyId: user.companyId,
-      driverId: user.driverId
+      companyId: (user as any).companyId,
+      driverId: (user as any).driverId
     };
 
     // Update session last used time
@@ -214,7 +230,7 @@ export async function authenticateToken(
     }
 
     // Log successful authentication
-    logger.info('User authenticated', { userId: user.id, email: user.email, role: user.role });
+    logger.info('User authenticated', { userId: (user as any).id, email: (user as any).email, role: user.role });
 
   } catch (error) {
     logger.error('Authentication middleware error:', error);
@@ -248,18 +264,18 @@ function checkRouteAccess(route: string, userRole: UserRole): boolean {
  */
 export function requireRoles(...roles: UserRole[]) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!request.currentUser) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Authentication required'
       });
     }
 
-    if (!roles.includes(request.user.role)) {
+    if (!roles.includes(request.currentUser.role)) {
       logger.warn('Role violation', {
-        userId: request.user.id,
+        userId: request.currentUser.id,
         requiredRoles: roles,
-        userRole: request.user.role,
+        userRole: request.currentUser.role,
         route: request.url
       });
 
@@ -276,7 +292,7 @@ export function requireRoles(...roles: UserRole[]) {
  */
 export function requireSectionPermission(section: string) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!request.currentUser) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Authentication required'
@@ -284,16 +300,16 @@ export function requireSectionPermission(section: string) {
     }
 
     // Super admins have access to everything
-    if (request.user.role === UserRole.SUPER_ADMIN) {
+    if (request.currentUser.role === UserRole.SUPER_ADMIN) {
       return;
     }
 
     // Check if user has permission for this section
-    const user = await User.findById(request.user.id).select('permissions');
-    if (!user || !user.permissions || !user.permissions[section]) {
+    const dbUser = await User.findById(request.currentUser.id).select('permissions');
+    if (!dbUser || !(dbUser as any).permissions || !(dbUser as any).permissions[section]) {
       logger.warn('Section permission violation', {
-        userId: request.user.id,
-        userRole: request.user.role,
+        userId: request.currentUser.id,
+        userRole: request.currentUser.role,
         requiredSection: section,
         route: request.url
       });
@@ -311,7 +327,7 @@ export function requireSectionPermission(section: string) {
  */
 export function requireCompanyOwnership() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!request.currentUser) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Authentication required'
@@ -319,18 +335,18 @@ export function requireCompanyOwnership() {
     }
 
     // Super admins and admins can access any company data
-    if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(request.user.role)) {
+    if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(request.currentUser.role)) {
       return;
     }
 
     // Business users can only access their own company data
-    if (request.user.role === UserRole.BUSINESS) {
+    if (request.currentUser.role === UserRole.BUSINESS) {
       const companyIdFromRoute = (request.params as any)?.companyId;
       
-      if (companyIdFromRoute && companyIdFromRoute !== request.user.companyId) {
+      if (companyIdFromRoute && companyIdFromRoute !== request.currentUser.companyId) {
         logger.warn('Company access violation', {
-          userId: request.user.id,
-          userCompanyId: request.user.companyId,
+          userId: request.currentUser.id,
+          userCompanyId: request.currentUser.companyId,
           requestedCompanyId: companyIdFromRoute
         });
 
@@ -348,7 +364,7 @@ export function requireCompanyOwnership() {
  */
 export function requireDriverOwnership() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!request.user) {
+    if (!request.currentUser) {
       return reply.code(401).send({
         error: 'Unauthorized',
         message: 'Authentication required'
@@ -356,18 +372,18 @@ export function requireDriverOwnership() {
     }
 
     // Admins can access any driver data
-    if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(request.user.role)) {
+    if ([UserRole.SUPER_ADMIN, UserRole.ADMIN].includes(request.currentUser.role)) {
       return;
     }
 
     // Drivers can only access their own data
-    if (request.user.role === UserRole.DRIVER) {
+    if (request.currentUser.role === UserRole.DRIVER) {
       const driverIdFromRoute = (request.params as any)?.driverId;
       
-      if (driverIdFromRoute && driverIdFromRoute !== request.user.driverId) {
+      if (driverIdFromRoute && driverIdFromRoute !== request.currentUser.driverId) {
         logger.warn('Driver access violation', {
-          userId: request.user.id,
-          userDriverId: request.user.driverId,
+          userId: request.currentUser.id,
+          userDriverId: request.currentUser.driverId,
           requestedDriverId: driverIdFromRoute
         });
 
@@ -421,11 +437,11 @@ export async function rateLimitByUser(
   maxRequests: number = 100,
   windowMs: number = 60000 // 1 minute
 ) {
-  if (!request.user) {
+  if (!request.currentUser) {
     return; // Skip rate limiting for unauthenticated requests
   }
 
-  const key = `rate_limit:user:${request.user.id}`;
+  const key = `rate_limit:user:${request.currentUser.id}`;
   const current = await redis.incr(key);
   
   if (current === 1) {
@@ -434,7 +450,7 @@ export async function rateLimitByUser(
 
   if (current > maxRequests) {
     logger.warn('Rate limit exceeded', {
-      userId: request.user.id,
+      userId: request.currentUser.id,
       ip: request.ip,
       url: request.url,
       limit: maxRequests

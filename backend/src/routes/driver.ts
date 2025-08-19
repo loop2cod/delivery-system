@@ -16,7 +16,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
 
   // Get driver profile
   fastify.get('/profile', asyncHandler(async (request, reply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     // Find driver by user_id
     const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
@@ -45,7 +45,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
 
   // Get assigned deliveries
   fastify.get('/assignments', asyncHandler(async (request, reply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     // Find driver by user_id
     const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
@@ -82,7 +82,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
   // Accept delivery assignment
   fastify.post('/assignments/:id/accept', asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     // Find driver by user_id
     const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
@@ -141,7 +141,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
   fastify.post('/assignments/:id/complete', asyncHandler(async (request, reply) => {
     const { id } = request.params as { id: string };
     const { delivery_notes, recipient_signature } = request.body as any;
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     // Find driver by user_id
     const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
@@ -199,7 +199,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
   // Update driver location
   fastify.post('/location', asyncHandler(async (request, reply) => {
     const { latitude, longitude, accuracy } = request.body as any;
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     if (!latitude || !longitude) {
       return reply.code(400).send({ error: 'Latitude and longitude are required' });
@@ -234,7 +234,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
   // Update driver status
   fastify.put('/status', asyncHandler(async (request, reply) => {
     const { status } = request.body as { status: DriverStatus };
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     if (!Object.values(DriverStatus).includes(status)) {
       return reply.code(400).send({ error: 'Invalid status' });
@@ -267,7 +267,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
 
   // Upload delivery photos
   fastify.post('/photos/upload', asyncHandler(async (request, reply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     
     // Find driver by user_id
     const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });

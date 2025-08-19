@@ -195,7 +195,7 @@ export async function authRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
     const token = request.headers.authorization?.replace('Bearer ', '') || 
                   request.cookies?.token;
-    const userId = request.user?.id;
+    const userId = request.currentUser?.id;
 
     if (token) {
       await AuthService.logout(token, userId);
@@ -224,7 +224,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     preHandler: [rateLimitByUser]
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
 
     await AuthService.logoutAll(userId);
 
@@ -262,7 +262,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
     }
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     const user = await AuthService.getUserById(userId);
     return user;
   }));
@@ -296,7 +296,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     preHandler: [rateLimitByUser]
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     const updates = request.body as any;
 
     const updatedUser = await AuthService.updateProfile(userId, updates);
@@ -328,7 +328,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     preHandler: [rateLimitByUser]
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
-    const userId = request.user!.id;
+    const userId = request.currentUser!.id;
     const { currentPassword, newPassword } = request.body as any;
 
     await AuthService.changePassword(userId, currentPassword, newPassword);
@@ -368,10 +368,10 @@ export async function authRoutes(fastify: FastifyInstance) {
     return {
       valid: true,
       user: {
-        id: request.user!.id,
-        email: request.user!.email,
-        name: request.user!.name,
-        role: request.user!.role
+        id: request.currentUser!.id,
+        email: request.currentUser!.email,
+        name: request.currentUser!.name,
+        role: request.currentUser!.role
       }
     };
   }));

@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { MongoClient, Db, Collection, ClientSession } from 'mongodb';
+import mongoose, { Document } from 'mongoose';
+import { MongoClient, Db, Collection, ClientSession, WithId, OptionalUnlessRequiredId } from 'mongodb';
 import { config } from './environment';
 import { logger } from '../utils/logger';
 
@@ -20,18 +20,18 @@ export class DatabaseService {
   /**
    * Get a collection
    */
-  collection<T = any>(name: string): Collection<T> {
+  collection<T extends Document = Document>(name: string): Collection<T> {
     return this.db.collection<T>(name);
   }
 
   /**
    * Find a single document
    */
-  async findOne<T = any>(
+  async findOne<T extends Document = Document>(
     collection: string,
     filter: Record<string, any> = {},
     options?: any
-  ): Promise<T | null> {
+  ): Promise<WithId<T> | null> {
     const start = Date.now();
     
     try {
@@ -47,12 +47,12 @@ export class DatabaseService {
         });
       }
       
-      return result;
+      return result as WithId<T> | null;
     } catch (error) {
       logger.error('Database findOne error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -61,11 +61,11 @@ export class DatabaseService {
   /**
    * Find multiple documents
    */
-  async findMany<T = any>(
+  async findMany<T extends Document = Document>(
     collection: string,
     filter: Record<string, any> = {},
     options?: any
-  ): Promise<T[]> {
+  ): Promise<WithId<T>[]> {
     const start = Date.now();
     
     try {
@@ -82,12 +82,12 @@ export class DatabaseService {
         });
       }
       
-      return result;
+      return result as WithId<T>[];
     } catch (error) {
       logger.error('Database find error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -96,27 +96,27 @@ export class DatabaseService {
   /**
    * Insert a single document
    */
-  async insertOne<T = any>(
+  async insertOne<T extends Document = Document>(
     collection: string,
-    document: Record<string, any>,
+    document: OptionalUnlessRequiredId<T>,
     options?: any
-  ): Promise<any> {
+  ): Promise<WithId<T>> {
     try {
       // Add timestamps
       const now = new Date();
       const docWithTimestamps = {
         ...document,
-        created_at: document.created_at || now,
-        updated_at: document.updated_at || now
+        created_at: (document as any).created_at || now,
+        updated_at: (document as any).updated_at || now
       };
 
-      const result = await this.collection<T>(collection).insertOne(docWithTimestamps, options);
-      return { ...docWithTimestamps, _id: result.insertedId };
+      const result = await this.collection<T>(collection).insertOne(docWithTimestamps as OptionalUnlessRequiredId<T>, options);
+      return { ...docWithTimestamps, _id: result.insertedId } as WithId<T>;
     } catch (error) {
       logger.error('Database insertOne error', {
         collection,
         document: JSON.stringify(document).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -125,29 +125,29 @@ export class DatabaseService {
   /**
    * Insert multiple documents
    */
-  async insertMany<T = any>(
+  async insertMany<T extends Document = Document>(
     collection: string,
-    documents: Record<string, any>[],
+    documents: OptionalUnlessRequiredId<T>[],
     options?: any
-  ): Promise<any[]> {
+  ): Promise<WithId<T>[]> {
     try {
       const now = new Date();
       const docsWithTimestamps = documents.map(doc => ({
         ...doc,
-        created_at: doc.created_at || now,
-        updated_at: doc.updated_at || now
+        created_at: (doc as any).created_at || now,
+        updated_at: (doc as any).updated_at || now
       }));
 
-      const result = await this.collection<T>(collection).insertMany(docsWithTimestamps, options);
+      const result = await this.collection<T>(collection).insertMany(docsWithTimestamps as OptionalUnlessRequiredId<T>[], options);
       return docsWithTimestamps.map((doc, index) => ({
         ...doc,
         _id: result.insertedIds[index]
-      }));
+      })) as WithId<T>[];
     } catch (error) {
       logger.error('Database insertMany error', {
         collection,
         count: documents.length,
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -156,12 +156,12 @@ export class DatabaseService {
   /**
    * Update a single document
    */
-  async updateOne<T = any>(
+  async updateOne<T extends Document = Document>(
     collection: string,
     filter: Record<string, any>,
     update: Record<string, any>,
     options?: any
-  ): Promise<T | null> {
+  ): Promise<WithId<T> | null> {
     try {
       // Add updated timestamp
       const updateWithTimestamp = {
@@ -178,13 +178,13 @@ export class DatabaseService {
         { returnDocument: 'after', ...options }
       );
       
-      return result;
+      return result as unknown as WithId<T> | null;
     } catch (error) {
       logger.error('Database updateOne error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
         update: JSON.stringify(update).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -193,7 +193,7 @@ export class DatabaseService {
   /**
    * Update multiple documents
    */
-  async updateMany<T = any>(
+  async updateMany<T extends Document = Document>(
     collection: string,
     filter: Record<string, any>,
     update: Record<string, any>,
@@ -221,7 +221,7 @@ export class DatabaseService {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
         update: JSON.stringify(update).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -230,7 +230,7 @@ export class DatabaseService {
   /**
    * Delete a single document
    */
-  async deleteOne<T = any>(
+  async deleteOne<T extends Document = Document>(
     collection: string,
     filter: Record<string, any>,
     options?: any
@@ -242,7 +242,7 @@ export class DatabaseService {
       logger.error('Database deleteOne error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -251,7 +251,7 @@ export class DatabaseService {
   /**
    * Delete multiple documents
    */
-  async deleteMany<T = any>(
+  async deleteMany<T extends Document = Document>(
     collection: string,
     filter: Record<string, any>,
     options?: any
@@ -263,7 +263,7 @@ export class DatabaseService {
       logger.error('Database deleteMany error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -272,7 +272,7 @@ export class DatabaseService {
   /**
    * Count documents
    */
-  async count<T = any>(
+  async count<T extends Document = Document>(
     collection: string,
     filter: Record<string, any> = {},
     options?: any
@@ -283,7 +283,7 @@ export class DatabaseService {
       logger.error('Database count error', {
         collection,
         filter: JSON.stringify(filter).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -292,18 +292,18 @@ export class DatabaseService {
   /**
    * Execute aggregation pipeline
    */
-  async aggregate<T = any>(
+  async aggregate<T extends Document = Document>(
     collection: string,
     pipeline: Record<string, any>[],
     options?: any
   ): Promise<T[]> {
     try {
-      return await this.collection<T>(collection).aggregate(pipeline, options).toArray();
+      return await this.collection<T>(collection).aggregate(pipeline, options).toArray() as T[];
     } catch (error) {
       logger.error('Database aggregate error', {
         collection,
         pipeline: JSON.stringify(pipeline).substring(0, 100),
-        error: error.message
+        error: (error as Error).message
       });
       throw error;
     }
@@ -333,6 +333,22 @@ export class DatabaseService {
     } finally {
       await session.endSession();
     }
+  }
+
+  /**
+   * Execute raw MongoDB query (for compatibility)
+   */
+  async query(queryString: string, params?: any[]): Promise<any> {
+    // This is a compatibility method - in practice, should be replaced with proper MongoDB methods
+    throw new Error('Raw query method not implemented for MongoDB. Use specific collection methods instead.');
+  }
+
+  /**
+   * Execute raw MongoDB query returning single result (for compatibility)
+   */
+  async queryOne(queryString: string, params?: any[]): Promise<any> {
+    // This is a compatibility method - in practice, should be replaced with proper MongoDB methods
+    throw new Error('Raw queryOne method not implemented for MongoDB. Use findOne method instead.');
   }
 
   /**

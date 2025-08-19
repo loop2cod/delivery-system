@@ -239,7 +239,7 @@ export class RedisService {
    * Get hash field
    */
   async hget(key: string, field: string): Promise<string | null> {
-    return this.client.hGet(key, field);
+    return (await this.client.hGet(key, field)) || null;
   }
 
   /**
@@ -254,6 +254,13 @@ export class RedisService {
    */
   async hdel(key: string, ...fields: string[]): Promise<number> {
     return this.client.hDel(key, fields);
+  }
+
+  /**
+   * Get keys matching pattern
+   */
+  async keys(pattern: string): Promise<string[]> {
+    return this.client.keys(pattern);
   }
 
   /**
@@ -327,7 +334,7 @@ export async function connectRedis(): Promise<void> {
     await redis.connect();
     console.log('Redis connection successful');
   } catch (error) {
-    console.warn('Redis connection failed in development - continuing without Redis:', error.message);
+    console.warn('Redis connection failed in development - continuing without Redis:', (error as Error).message);
     // In development, don't throw error to allow testing without Redis
     if (process.env.NODE_ENV === 'production') {
       throw error;
@@ -336,7 +343,7 @@ export async function connectRedis(): Promise<void> {
 }
 
 // Cache utilities for PWA optimization
-export const cacheUtils = {
+export const cacheUtils: any = {
   // Cache keys
   keys: {
     user: (id: string) => `user:${id}`,
@@ -362,7 +369,7 @@ export const cacheUtils = {
   /**
    * Cache API response with automatic JSON serialization
    */
-  async cacheApiResponse<T>(key: string, data: T, ttl: number = cacheUtils.ttl.MEDIUM): Promise<void> {
+  async cacheApiResponse<T extends string | number | object>(key: string, data: T, ttl: number = 1800): Promise<void> {
     await redis.set(key, data, ttl);
   },
 
