@@ -3,6 +3,7 @@ import { UserRole } from '../models/User';
 import { cacheUtils, redis } from '../config/redis';
 import { User } from '../models/User';
 import { logger } from '../utils/logger';
+import { db } from '../config/database';
 
 // Extend Fastify request interface
 declare module 'fastify' {
@@ -112,6 +113,31 @@ export async function authenticateToken(
       // Redis unavailable, will fetch from database
     }
     
+    // If user is from cache but missing companyId, populate it
+    if (user && user.role === UserRole.BUSINESS && !user.companyId) {
+      try {
+        const companyUser = await db.findOne('company_users', { 
+          user_id: decoded.userId
+        });
+        
+        if (companyUser) {
+          user.companyId = companyUser.company_id;
+          // Update cache with companyId
+          try {
+            await redis.set(
+              cacheUtils.keys.user(user.id),
+              user,
+              cacheUtils.ttl.MEDIUM
+            );
+          } catch (error) {
+            // Redis unavailable, continuing
+          }
+        }
+      } catch (error) {
+        // Continue without companyId if lookup fails
+      }
+    }
+    
     if (!user) {
       // User not in cache, fetch from database
       try {
@@ -122,6 +148,17 @@ export async function authenticateToken(
             error: 'Unauthorized',
             message: 'User not found or inactive'
           });
+        }
+
+        // For business users, get their company association
+        if (user.role === UserRole.BUSINESS) {
+          const companyUser = await db.findOne('company_users', { 
+            user_id: user._id.toString() 
+          });
+          
+          if (companyUser) {
+            user.companyId = companyUser.company_id;
+          }
         }
 
         // Cache user data

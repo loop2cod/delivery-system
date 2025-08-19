@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { businessAPI } from '@/lib/api';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import {
   ArrowLeftIcon,
   ClockIcon,
@@ -132,7 +132,7 @@ export default function RequestDetailPage() {
       toast.success(`Opening tracking for ${request.requestNumber}`);
       router.push(`/deliveries?track=${request.id}`);
     } else {
-      toast('Tracking not available for this request status');
+      toast.info('Tracking not available for this request status');
     }
   };
 

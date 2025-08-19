@@ -8,7 +8,7 @@ import { BusinessStats } from '@/components/dashboard/BusinessStats';
 import { RecentDeliveries } from '@/components/dashboard/RecentDeliveries';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { businessAPI } from '@/lib/api';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import { DeliveryChart } from '@/components/dashboard/DeliveryChart';
 
 interface DashboardData {

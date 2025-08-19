@@ -61,7 +61,8 @@
       "Bash(pnpm --filter @delivery-uae/backend run build)",
       "Bash(pnpm create-su:*)",
       "Bash(mongosh:*)",
-      "Bash(pnpm -w run create-suAdmin)"
+      "Bash(pnpm -w run create-suAdmin)",
+      "Bash(PORT=3004 npm run dev)"
     ],
     "deny": []
   }

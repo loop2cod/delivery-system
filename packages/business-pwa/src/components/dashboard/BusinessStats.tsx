@@ -24,7 +24,7 @@ interface BusinessStatsProps {
 
 interface StatCard {
   name: string;
-  key: keyof BusinessStatsProps['stats'];
+  key: 'activeDeliveries' | 'totalRequests';
   icon: React.ForwardRefExoticComponent<Omit<React.SVGProps<SVGSVGElement>, "ref"> & { title?: string | undefined; titleId?: string | undefined; } & React.RefAttributes<SVGSVGElement>>;
   color: string;
   description: string;

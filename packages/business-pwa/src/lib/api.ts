@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosError } from 'axios';
 import Cookies from 'js-cookie';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 
 // Create axios instance with base configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';

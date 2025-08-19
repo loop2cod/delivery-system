@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { businessAPI } from '@/lib/api';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import { DeliveryTable } from '@/components/deliveries/DeliveryTable';
 import {
   TruckIcon,

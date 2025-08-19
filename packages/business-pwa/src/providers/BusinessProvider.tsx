@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Cookies from 'js-cookie';
 import axios from 'axios';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 
 interface BusinessUser {
   id: string;
@@ -259,9 +259,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
         setRequiresProfileCompletion(isProfileIncomplete);
         
         if (isProfileIncomplete) {
-          toast('Please complete your company profile to get started', { 
-            icon: 'ℹ️' 
-          });
+          toast.info('Please complete your company profile to get started');
           router.push('/profile');
         } else {
           router.push('/dashboard');
@@ -269,9 +267,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       } catch (profileError) {
         console.error('Failed to check profile:', profileError);
         setRequiresProfileCompletion(true);
-        toast('Please complete your company profile to get started', { 
-          icon: 'ℹ️' 
-        });
+        toast.info('Please complete your company profile to get started');
         router.push('/profile');
       }
     } catch (error: any) {
@@ -339,9 +335,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
   const updateProfile = async (data: Partial<BusinessUser>) => {
     try {
       // Profile update not implemented yet
-      toast('Profile update feature coming soon', { 
-        icon: 'ℹ️' 
-      });
+      toast.info('Profile update feature coming soon');
       throw new Error('Profile update not implemented yet');
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to update profile';

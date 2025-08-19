@@ -6,43 +6,12 @@ import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { NewRequestForm } from '@/components/requests/NewRequestForm';
 import { businessAPI } from '@/lib/api';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import {
   ArrowLeftIcon,
   DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 
-interface DeliveryRequestFormData {
-  priority: 'normal' | 'high' | 'urgent';
-  pickupDetails: {
-    contactName: string;
-    phone: string;
-    address: string;
-    instructions?: string;
-  };
-  deliveryDetails: {
-    contactName: string;
-    phone: string;
-    address: string;
-    instructions?: string;
-  };
-  items: Array<{
-    description: string;
-    quantity: number;
-    weight?: number;
-    dimensions?: string;
-    value?: number;
-    fragile: boolean;
-  }>;
-  schedule: {
-    pickupDate: string;
-    pickupTime: string;
-    deliveryDate: string;
-    deliveryTime: string;
-  };
-  specialRequirements?: string;
-  internalReference?: string;
-}
 
 export default function NewRequestPage() {
   const { isAuthenticated, isLoading, user } = useBusiness();
@@ -68,6 +37,7 @@ export default function NewRequestPage() {
   }
 
   const handleSubmit = async (data: any) => {
+    console.log('Received form data:', data);
     setIsSubmitting(true);
     
     try {

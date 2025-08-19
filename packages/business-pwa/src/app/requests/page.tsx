@@ -6,7 +6,7 @@ import { useBusiness } from '@/providers/BusinessProvider';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { RequestTable } from '@/components/requests/RequestTable';
 import { businessAPI } from '@/lib/api';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import {
   PlusIcon,
   ArrowDownTrayIcon,
@@ -132,9 +132,7 @@ export default function RequestsPage() {
   };
 
   const handleExportRequests = async () => {
-    try {
-      toast.loading('Preparing export...');
-      
+    const exportPromise = (async () => {
       // Get all requests by fetching multiple pages (max 100 per page)
       let allRequests: DeliveryRequest[] = [];
       let currentPage = 1;
@@ -157,11 +155,8 @@ export default function RequestsPage() {
         if (currentPage > 50) break; // Safety break
       }
       
-      toast.dismiss();
-      
       if (allRequests.length === 0) {
-        toast.error('No requests to export');
-        return;
+        throw new Error('No requests to export');
       }
       
       const csvData = allRequests.map(req => ({
@@ -185,12 +180,14 @@ export default function RequestsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
       
-      toast.success(`Exported ${allRequests.length} requests successfully`);
-    } catch (error) {
-      toast.dismiss();
-      console.error('Export error:', error);
-      toast.error('Failed to export requests');
-    }
+      return allRequests.length;
+    })();
+
+    await toast.promise(exportPromise, {
+      loading: 'Preparing export...',
+      success: (count) => `Exported ${count} requests successfully`,
+      error: (error) => error.message || 'Failed to export requests',
+    });
   };
 
   return (

@@ -275,9 +275,11 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
         // Link user to company
         await db.insertOne('company_users', {
-          company_id: newCompany._id,
-          user_id: businessUserId,
-          is_primary: true
+          company_id: newCompany._id.toString(),
+          user_id: businessUserId.toString(),
+          is_primary: true,
+          created_at: new Date(),
+          updated_at: new Date()
         });
 
         // Update inquiry status to CONVERTED
@@ -520,7 +522,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Find the company_user relationship for this company where is_primary = true
     const companyUserRelation = await db.findOne('company_users', {
-      company_id: new ObjectId(id),
+      company_id: id,
       is_primary: true
     });
 
@@ -533,7 +535,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     // Find the actual user
     const user = await db.findOne('users', {
-      _id: companyUserRelation.user_id,
+      _id: new ObjectId(companyUserRelation.user_id),
       role: 'BUSINESS'
     });
 

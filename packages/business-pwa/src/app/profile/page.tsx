@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { useBusiness } from '@/providers/BusinessProvider';
 import axios from 'axios';
-import toast from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import {
   BuildingOffice2Icon,
   MapPinIcon,

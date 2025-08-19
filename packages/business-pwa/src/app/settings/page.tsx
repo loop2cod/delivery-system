@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import { toast } from '@/lib/toast';
 import { LockClosedIcon, UserIcon, KeyIcon, CogIcon } from '@heroicons/react/24/outline';
 import { BusinessLayout } from '@/components/layout/BusinessLayout';
 import { api } from '@/lib/api';

@@ -90,6 +90,18 @@ export class AuthService {
       throw new ValidationError('Account is not active. Please contact support.');
     }
 
+    // For business users, get their company association
+    let companyId: string | undefined = undefined;
+    if (user.role === UserRole.BUSINESS) {
+      const companyUser = await db.findOne('company_users', { 
+        user_id: user._id.toString() 
+      });
+      
+      if (companyUser) {
+        companyId = companyUser.company_id;
+      }
+    }
+
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     
@@ -133,7 +145,7 @@ export class AuthService {
           email: user.email,
           name: user.name,
           role: user.role,
-          companyId: user.companyId,
+          companyId: companyId,
           driverId: user.driverId
         },
         cacheUtils.ttl.MEDIUM
@@ -146,7 +158,7 @@ export class AuthService {
       userId: user._id.toString(), 
       email: user.email, 
       role: user.role,
-      companyId: user.companyId
+      companyId: companyId
     });
 
     return {
@@ -155,7 +167,7 @@ export class AuthService {
         email: user.email,
         name: user.name,
         role: user.role,
-        companyId: user.companyId,
+        companyId: companyId,
         driverId: user.driverId
       },
       token,
