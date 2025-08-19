@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Bars3Icon, XMarkIcon, TruckIcon } from '@heroicons/react/24/outline';
-import { usePWA } from '@/components/providers/PWAProvider';
+// PWA features disabled for public site
 
 const navigation = [
   { name: 'Home', href: '/' },
@@ -15,7 +15,7 @@ export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const pathname = usePathname();
-  const { isInstalled } = usePWA();
+  // const { isInstalled } = usePWA();
 
   useEffect(() => {
     const handleScroll = () => {

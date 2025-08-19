@@ -27,6 +27,7 @@ interface PWAProviderProps {
   children: ReactNode;
 }
 
+// PWA disabled for public site. Provider is kept for potential future use but does nothing.
 export function PWAProvider({ children }: PWAProviderProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -84,22 +85,11 @@ export function PWAProvider({ children }: PWAProviderProps) {
       }).catch(console.error);
     };
 
-    // Register service worker
-    const registerServiceWorker = async () => {
-      if ('serviceWorker' in navigator) {
-        try {
-          await navigator.serviceWorker.register('/sw.js');
-          console.log('Service Worker registered successfully');
-        } catch (error) {
-          console.error('Service Worker registration failed:', error);
-        }
-      }
-    };
+    // Skip service worker registration for non-PWA public site
 
     // Initialize
     checkInstalled();
     updateOnlineStatus();
-    registerServiceWorker();
 
     // Event listeners
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
