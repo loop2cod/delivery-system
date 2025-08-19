@@ -15,8 +15,11 @@ COPY turbo.json ./
 COPY backend/package.json ./backend/
 COPY packages/*/package.json ./packages/*/
 
+# Allow toggling lockfile strictness at build time (defaults to strict)
+ARG PNPM_FLAGS="--frozen-lockfile"
+
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install $PNPM_FLAGS
 
 # Copy source code
 COPY . .
