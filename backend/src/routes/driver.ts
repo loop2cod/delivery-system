@@ -264,4 +264,60 @@ export async function driverRoutes(fastify: FastifyInstance) {
       message: 'Status updated successfully'
     };
   }));
+
+  // Upload delivery photos
+  fastify.post('/photos/upload', asyncHandler(async (request, reply) => {
+    const userId = request.user!.id;
+    
+    // Find driver by user_id
+    const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
+    
+    if (!driver) {
+      return reply.code(404).send({ error: 'Driver profile not found' });
+    }
+
+    // Handle multipart form data
+    const data = await request.file();
+    
+    if (!data) {
+      return reply.code(400).send({ error: 'No file uploaded' });
+    }
+
+    const { assignment_id, photo_type } = data.fields as any;
+    
+    if (!assignment_id || !photo_type) {
+      return reply.code(400).send({ error: 'Assignment ID and photo type are required' });
+    }
+
+    // Verify assignment belongs to driver
+    const assignment = await db.findOne('delivery_requests', {
+      _id: new ObjectId(assignment_id.value),
+      assigned_driver_id: driver._id
+    });
+
+    if (!assignment) {
+      return reply.code(404).send({ error: 'Assignment not found' });
+    }
+
+    // For now, just store photo metadata (in production, upload to cloud storage)
+    const photoRecord = {
+      assignment_id: new ObjectId(assignment_id.value),
+      driver_id: driver._id,
+      photo_type: photo_type.value,
+      filename: data.filename,
+      mimetype: data.mimetype,
+      size: data.file.bytesRead,
+      uploaded_at: new Date(),
+      // In production, store cloud storage URL here
+      storage_url: `/uploads/photos/${assignment_id.value}_${Date.now()}_${data.filename}`
+    };
+
+    const result = await db.insertOne('delivery_photos', photoRecord);
+
+    return {
+      id: result.insertedId.toString(),
+      message: 'Photo uploaded successfully',
+      photo_type: photo_type.value
+    };
+  }));
 }

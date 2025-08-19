@@ -6,7 +6,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useLocation } from '@/providers/LocationProvider';
 import { 
-  NavigationIcon,
+  MapIcon,
   MapPinIcon,
   ClockIcon,
   ExclamationTriangleIcon,
@@ -209,7 +209,7 @@ export default function Navigation({ isOpen, onClose, destination, delivery }: N
       <div className="bg-primary text-white p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <NavigationIcon className="h-6 w-6" />
+            <MapIcon className="h-6 w-6" />
             <div>
               <h2 className="font-semibold">
                 {destination.type === 'pickup' ? 'Navigate to Pickup' : 'Navigate to Delivery'}
@@ -256,7 +256,7 @@ export default function Navigation({ isOpen, onClose, destination, delivery }: N
               <span className="text-sm">{formatDuration(route.duration)}</span>
             </div>
             <div className="flex items-center space-x-1">
-              <NavigationIcon className="h-4 w-4" />
+              <MapIcon className="h-4 w-4" />
               <span className="text-sm">{formatDistance(route.distance * 1000)}</span>
             </div>
           </div>
@@ -338,7 +338,7 @@ export default function Navigation({ isOpen, onClose, destination, delivery }: N
         <div className="bg-white border-t border-gray-200 p-4">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <NavigationIcon className="h-4 w-4 text-white" />
+              <MapIcon className="h-4 w-4 text-white" />
             </div>
             <div className="flex-1">
               <p className="font-medium text-gray-900">

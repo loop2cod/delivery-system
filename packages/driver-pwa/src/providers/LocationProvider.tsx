@@ -6,111 +6,184 @@ import { useDriver } from './DriverProvider';
 interface LocationContextType {
   currentLocation: { lat: number; lng: number } | null;
   isTracking: boolean;
-  permission: 'granted' | 'denied' | 'prompt';
+  permission: PermissionState | null;
   accuracy: number | null;
+  lastUpdate: Date | null;
   
-  startTracking: () => void;
+  // Methods
+  startTracking: () => Promise<void>;
   stopTracking: () => void;
-  requestPermission: () => Promise<void>;
+  requestPermission: () => Promise<PermissionState>;
+  getCurrentPosition: () => Promise<{ lat: number; lng: number } | null>;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
+  const { updateLocation } = useDriver();
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isTracking, setIsTracking] = useState(false);
-  const [permission, setPermission] = useState<'granted' | 'denied' | 'prompt'>('prompt');
+  const [permission, setPermission] = useState<PermissionState | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [watchId, setWatchId] = useState<number | null>(null);
-  
-  const { updateLocation, isAuthenticated } = useDriver();
 
-  // Check initial permission state
+  // Check initial permission status
   useEffect(() => {
-    if ('geolocation' in navigator && 'permissions' in navigator) {
+    if ('permissions' in navigator) {
       navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-        setPermission(result.state as 'granted' | 'denied' | 'prompt');
+        setPermission(result.state);
         
         result.addEventListener('change', () => {
-          setPermission(result.state as 'granted' | 'denied' | 'prompt');
+          setPermission(result.state);
+          if (result.state === 'denied' && isTracking) {
+            stopTracking();
+          }
         });
       });
     }
-  }, []);
+  }, [isTracking]);
 
-  // Request location permission
-  const requestPermission = useCallback(async () => {
+  // Request geolocation permission
+  const requestPermission = useCallback(async (): Promise<PermissionState> => {
     if (!('geolocation' in navigator)) {
-      console.error('Geolocation is not supported');
-      return;
+      throw new Error('Geolocation is not supported');
     }
 
-    try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        () => {
+          setPermission('granted');
+          resolve('granted');
+        },
+        (error) => {
+          console.error('Geolocation permission denied:', error);
+          setPermission('denied');
+          resolve('denied');
+        },
+        {
           enableHighAccuracy: true,
           timeout: 10000,
           maximumAge: 60000
-        });
-      });
-
-      setPermission('granted');
-      setCurrentLocation({
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      });
-      setAccuracy(position.coords.accuracy);
-    } catch (error) {
-      console.error('Location permission denied:', error);
-      setPermission('denied');
-    }
+        }
+      );
+    });
   }, []);
 
-  // Start location tracking
-  const startTracking = useCallback(() => {
-    if (!('geolocation' in navigator) || permission !== 'granted') {
-      return;
+  // Get current position once
+  const getCurrentPosition = useCallback(async (): Promise<{ lat: number; lng: number } | null> => {
+    if (!('geolocation' in navigator)) {
+      throw new Error('Geolocation is not supported');
     }
 
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
+    if (permission !== 'granted') {
+      const newPermission = await requestPermission();
+      if (newPermission !== 'granted') {
+        return null;
+      }
     }
+
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setCurrentLocation(location);
+          setAccuracy(position.coords.accuracy);
+          setLastUpdate(new Date());
+          resolve(location);
+        },
+        (error) => {
+          console.error('Error getting current position:', error);
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    });
+  }, [permission, requestPermission]);
+
+  // Start continuous tracking
+  const startTracking = useCallback(async () => {
+    if (!('geolocation' in navigator)) {
+      throw new Error('Geolocation is not supported');
+    }
+
+    if (permission !== 'granted') {
+      const newPermission = await requestPermission();
+      if (newPermission !== 'granted') {
+        throw new Error('Geolocation permission denied');
+      }
+    }
+
+    if (isTracking) {
+      return; // Already tracking
+    }
+
+    const options: PositionOptions = {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 30000 // 30 seconds
+    };
+
+    const successCallback = (position: GeolocationPosition) => {
+      const location = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+
+      setCurrentLocation(location);
+      setAccuracy(position.coords.accuracy);
+      setLastUpdate(new Date());
+
+      // Update driver location on server
+      updateLocation(
+        position.coords.latitude,
+        position.coords.longitude,
+        position.coords.accuracy
+      );
+    };
+
+    const errorCallback = (error: GeolocationPositionError) => {
+      console.error('Geolocation error:', error);
+      
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          setPermission('denied');
+          stopTracking();
+          break;
+        case error.POSITION_UNAVAILABLE:
+          console.warn('Position unavailable');
+          break;
+        case error.TIMEOUT:
+          console.warn('Geolocation timeout');
+          break;
+      }
+    };
 
     const id = navigator.geolocation.watchPosition(
-      (position) => {
-        const newLocation = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        };
-        
-        setCurrentLocation(newLocation);
-        setAccuracy(position.coords.accuracy);
-        
-        // Update location on server if authenticated
-        if (isAuthenticated) {
-          updateLocation(
-            position.coords.latitude,
-            position.coords.longitude,
-            position.coords.accuracy
-          );
-        }
-      },
-      (error) => {
-        console.error('Location tracking error:', error);
-        setIsTracking(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 30000,
-        maximumAge: 30000 // 30 seconds
-      }
+      successCallback,
+      errorCallback,
+      options
     );
 
     setWatchId(id);
     setIsTracking(true);
-  }, [permission, watchId, isAuthenticated, updateLocation]);
 
-  // Stop location tracking
+    // Also get initial position immediately
+    navigator.geolocation.getCurrentPosition(
+      successCallback,
+      errorCallback,
+      options
+    );
+  }, [permission, requestPermission, updateLocation, isTracking]);
+
+  // Stop tracking
   const stopTracking = useCallback(() => {
     if (watchId !== null) {
       navigator.geolocation.clearWatch(watchId);
@@ -119,12 +192,17 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     setIsTracking(false);
   }, [watchId]);
 
-  // Auto-start tracking when permission is granted and user is authenticated
+  // Auto-start tracking when permission is granted and driver is authenticated
   useEffect(() => {
-    if (permission === 'granted' && isAuthenticated && !isTracking) {
-      startTracking();
+    if (permission === 'granted' && !isTracking) {
+      // Auto-start tracking after a short delay
+      const timer = setTimeout(() => {
+        startTracking().catch(console.error);
+      }, 1000);
+
+      return () => clearTimeout(timer);
     }
-  }, [permission, isAuthenticated, isTracking, startTracking]);
+  }, [permission, isTracking, startTracking]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -140,9 +218,11 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     isTracking,
     permission,
     accuracy,
+    lastUpdate,
     startTracking,
     stopTracking,
-    requestPermission
+    requestPermission,
+    getCurrentPosition
   };
 
   return (

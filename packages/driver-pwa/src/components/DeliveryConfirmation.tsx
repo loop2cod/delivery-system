@@ -29,7 +29,7 @@ export default function DeliveryConfirmation({
   delivery, 
   type 
 }: DeliveryConfirmationProps) {
-  const { completePickup, completeDelivery, markDeliveryFailed } = useDriver();
+  const { completeAssignment } = useDriver();
   
   const [showPhotoCapture, setShowPhotoCapture] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -67,11 +67,7 @@ export default function DeliveryConfirmation({
     setIsSubmitting(true);
     
     try {
-      if (type === 'pickup') {
-        await completePickup(delivery.id, photos);
-      } else {
-        await completeDelivery(delivery.id, signature, photos, notes);
-      }
+      await completeAssignment(delivery.id, notes, signature);
       onClose();
     } catch (error) {
       console.error('Failed to complete delivery:', error);
@@ -86,7 +82,8 @@ export default function DeliveryConfirmation({
     setIsSubmitting(true);
     
     try {
-      await markDeliveryFailed(delivery.id, failureReason);
+      // TODO: Implement failure marking
+      console.log('Marking delivery as failed:', delivery.id, failureReason);
       onClose();
     } catch (error) {
       console.error('Failed to mark delivery as failed:', error);

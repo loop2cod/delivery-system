@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import RouteOptimizer from '@/components/RouteOptimizer';
 import LiveTracking from '@/components/LiveTracking';
-import { LocationCoordinate, OptimizedRoute, GeofenceBoundary, locationUtils } from '@delivery-uae/shared/location-services';
+import { LocationCoordinate, OptimizedRoute, GeofenceBoundary, locationUtils } from '@/lib/location-services';
 
 interface TrackingPageState {
   activeTab: 'tracking' | 'optimization' | 'analytics';

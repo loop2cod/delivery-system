@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useDriver } from '@/providers/DriverProvider';
 import { useLocation } from '@/providers/LocationProvider';
 import { usePWA } from '@/providers/PWAProvider';
@@ -10,7 +11,7 @@ import {
   ClockIcon, 
   BellIcon,
   QrCodeIcon,
-  NavigationIcon,
+  MapIcon,
   SignalIcon,
   SignalSlashIcon,
   CameraIcon,
@@ -21,6 +22,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function DriverDashboard() {
+  const router = useRouter();
   const { driver, assignments, isAuthenticated, isLoading, updateStatus, refreshAssignments } = useDriver();
   const { currentLocation, isTracking, startTracking, permission, requestPermission } = useLocation();
   const { isOnline, isInstalled, installPWA, isInstallable } = usePWA();
@@ -127,6 +129,13 @@ export default function DriverDashboard() {
                   Install
                 </button>
               )}
+              
+              <button
+                onClick={() => router.push('/profile')}
+                className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center"
+              >
+                <span className="text-sm font-bold">{driver.name.charAt(0)}</span>
+              </button>
             </div>
           </div>
 
@@ -201,7 +210,7 @@ export default function DriverDashboard() {
               <CheckCircleIcon className="h-5 w-5 text-green-500" />
               <span className="text-sm font-medium">Completed</span>
             </div>
-            <p className="text-2xl font-bold text-green-600 mt-1">{driver.totalDeliveries}</p>
+            <p className="text-2xl font-bold text-green-600 mt-1">{driver.total_deliveries}</p>
           </div>
           
           <div className="bg-white rounded-lg p-4 shadow-sm">
@@ -248,30 +257,43 @@ export default function DriverDashboard() {
       </main>
 
       {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-        <div className="grid grid-cols-4 py-2">
-          <button className="flex flex-col items-center py-2 px-1 text-primary">
-            <TruckIcon className="h-6 w-6" />
-            <span className="text-xs mt-1">Dashboard</span>
-          </button>
-          
-          <button className="flex flex-col items-center py-2 px-1 text-gray-500">
-            <QrCodeIcon className="h-6 w-6" />
-            <span className="text-xs mt-1">Scan</span>
-          </button>
-          
-          <button className="flex flex-col items-center py-2 px-1 text-gray-500">
-            <NavigationIcon className="h-6 w-6" />
-            <span className="text-xs mt-1">Navigate</span>
-          </button>
-          
-          <button className="flex flex-col items-center py-2 px-1 text-gray-500">
-            <CameraIcon className="h-6 w-6" />
-            <span className="text-xs mt-1">Camera</span>
-          </button>
-        </div>
-      </nav>
+      <BottomNavigation />
     </div>
+  );
+}
+
+function BottomNavigation() {
+  const router = useRouter();
+  const [currentPath, setCurrentPath] = useState('/');
+
+  useEffect(() => {
+    setCurrentPath(window.location.pathname);
+  }, []);
+
+  const navItems = [
+    { path: '/', icon: TruckIcon, label: 'Dashboard' },
+    { path: '/scan', icon: QrCodeIcon, label: 'Scan' },
+    { path: '/navigation', icon: MapIcon, label: 'Navigate' },
+    { path: '/camera', icon: CameraIcon, label: 'Camera' },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-pb">
+      <div className="grid grid-cols-4 py-2">
+        {navItems.map(({ path, icon: Icon, label }) => (
+          <button
+            key={path}
+            onClick={() => router.push(path)}
+            className={`flex flex-col items-center py-2 px-1 ${
+              currentPath === path ? 'text-primary' : 'text-gray-500'
+            }`}
+          >
+            <Icon className="h-6 w-6" />
+            <span className="text-xs mt-1">{label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 

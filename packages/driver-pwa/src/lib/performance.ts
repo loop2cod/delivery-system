@@ -1,8 +1,43 @@
 /**
- * Performance tracking initialization for Driver PWA
+ * Performance tracking for Driver PWA
  */
 
-import { createPWAMetrics, type PWAMetricsConfig } from '@/shared/performance/pwa-metrics';
+// Simple performance tracking without external dependencies
+interface PWAMetricsConfig {
+  appName: string;
+  version: string;
+  endpoint?: string;
+  enableAutoTracking?: boolean;
+  enableOptimizations?: boolean;
+}
+
+class SimplePWAMetrics {
+  private config: PWAMetricsConfig;
+
+  constructor(config: PWAMetricsConfig) {
+    this.config = config;
+  }
+
+  trackInteraction(category: string, action: string) {
+    console.log(`[${this.config.appName}] Interaction: ${category} - ${action}`);
+  }
+
+  trackDeliveryMetric(name: string, value: number, metadata?: Record<string, string>) {
+    console.log(`[${this.config.appName}] Metric: ${name} = ${value}`, metadata);
+  }
+
+  trackLocationUpdate(accuracy: number, timestamp: number) {
+    console.log(`[${this.config.appName}] Location: accuracy=${accuracy}m at ${new Date(timestamp).toISOString()}`);
+  }
+
+  trackFeatureUsage(feature: string, used: boolean) {
+    console.log(`[${this.config.appName}] Feature: ${feature} used=${used}`);
+  }
+
+  trackPageView(page: string, metadata?: Record<string, string>) {
+    console.log(`[${this.config.appName}] Page view: ${page}`, metadata);
+  }
+}
 
 const config: PWAMetricsConfig = {
   appName: 'driver-pwa',
@@ -13,7 +48,7 @@ const config: PWAMetricsConfig = {
 };
 
 // Initialize metrics for Driver PWA
-export const driverMetrics = createPWAMetrics(config);
+export const driverMetrics = new SimplePWAMetrics(config);
 
 // Driver PWA specific tracking functions
 export const trackDeliveryAction = (action: string, deliveryId: string) => {

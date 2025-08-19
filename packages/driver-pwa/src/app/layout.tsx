@@ -51,8 +51,8 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} overflow-x-hidden`}>
         <PWAProvider>
-          <LocationProvider>
-            <DriverProvider>
+          <DriverProvider>
+            <LocationProvider>
               {children}
               <Toaster 
                 position="top-center"
@@ -64,8 +64,8 @@ export default function RootLayout({
                   },
                 }}
               />
-            </DriverProvider>
-          </LocationProvider>
+            </LocationProvider>
+          </DriverProvider>
         </PWAProvider>
       </body>
     </html>
