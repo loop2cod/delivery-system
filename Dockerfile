@@ -13,7 +13,10 @@ COPY turbo.json ./
 
 # Copy all package.json files (preserve paths to avoid duplicates)
 COPY backend/package.json backend/package.json
-COPY packages/*/package.json packages/*/package.json
+COPY packages/public-pwa/package.json packages/public-pwa/package.json
+COPY packages/admin-pwa/package.json packages/admin-pwa/package.json
+COPY packages/business-pwa/package.json packages/business-pwa/package.json
+COPY packages/driver-pwa/package.json packages/driver-pwa/package.json
 
 # Allow toggling lockfile strictness at build time (defaults to strict)
 ARG PNPM_FLAGS="--frozen-lockfile"
