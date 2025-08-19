@@ -36,6 +36,8 @@ services:
     build:
       context: .
       target: backend
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     container_name: grs-backend
     restart: unless-stopped
     environment:
@@ -60,6 +62,8 @@ services:
     build:
       context: .
       target: public-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     container_name: grs-public-pwa
     restart: unless-stopped
     environment:
@@ -78,6 +82,8 @@ services:
     build:
       context: .
       target: admin-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     container_name: grs-admin-pwa
     restart: unless-stopped
     environment:
@@ -96,6 +102,8 @@ services:
     build:
       context: .
       target: business-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     container_name: grs-business-pwa
     restart: unless-stopped
     environment:
@@ -114,6 +122,8 @@ services:
     build:
       context: .
       target: driver-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     container_name: grs-driver-pwa
     restart: unless-stopped
     environment:
