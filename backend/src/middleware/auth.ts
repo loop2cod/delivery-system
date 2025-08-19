@@ -450,10 +450,10 @@ export async function authenticateApiKey(
  */
 export async function rateLimitByUser(
   request: FastifyRequest,
-  reply: FastifyReply,
-  maxRequests: number = 100,
-  windowMs: number = 60000 // 1 minute
+  reply: FastifyReply
 ) {
+  const maxRequests = 100;
+  const windowMs = 60000; // 1 minute
   if (!request.currentUser) {
     return; // Skip rate limiting for unauthenticated requests
   }

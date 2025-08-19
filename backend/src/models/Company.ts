@@ -106,8 +106,8 @@ const CompanySchema = new Schema<ICompany>({
     virtuals: true,
     transform: function(doc, ret) {
       ret.id = ret._id.toString();
-      if ('_id' in ret && ret._id !== undefined) delete ret._id;
-      if ('__v' in ret && ret.__v !== undefined) delete ret.__v;
+      (ret as any)._id = undefined; delete (ret as any)._id;
+      (ret as any).__v = undefined; delete (ret as any).__v;
       return ret;
     }
   },

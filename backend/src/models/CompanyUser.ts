@@ -42,8 +42,8 @@ const CompanyUserSchema = new Schema<ICompanyUser>({
     virtuals: true,
     transform: function(doc, ret) {
       ret.id = ret._id.toString();
-      delete ret._id;
-      delete ret.__v;
+      (ret as any)._id = undefined; delete (ret as any)._id;
+      (ret as any).__v = undefined; delete (ret as any).__v;
       return ret;
     }
   },

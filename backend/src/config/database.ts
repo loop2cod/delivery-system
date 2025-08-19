@@ -31,7 +31,7 @@ export class DatabaseService {
     collection: string,
     filter: Record<string, any> = {},
     options?: any
-  ): Promise<WithId<T> | null> {
+  ): Promise<any> {
     const start = Date.now();
     
     try {
@@ -47,7 +47,7 @@ export class DatabaseService {
         });
       }
       
-      return result as WithId<T> | null;
+      return result as any;
     } catch (error) {
       logger.error('Database findOne error', {
         collection,
@@ -65,7 +65,7 @@ export class DatabaseService {
     collection: string,
     filter: Record<string, any> = {},
     options?: any
-  ): Promise<WithId<T>[]> {
+  ): Promise<any[]> {
     const start = Date.now();
     
     try {
@@ -82,7 +82,7 @@ export class DatabaseService {
         });
       }
       
-      return result as WithId<T>[];
+      return result as any[];
     } catch (error) {
       logger.error('Database find error', {
         collection,
@@ -98,9 +98,9 @@ export class DatabaseService {
    */
   async insertOne<T extends Document = Document>(
     collection: string,
-    document: OptionalUnlessRequiredId<T>,
+    document: any,
     options?: any
-  ): Promise<WithId<T>> {
+  ): Promise<any> {
     try {
       // Add timestamps
       const now = new Date();
@@ -110,8 +110,8 @@ export class DatabaseService {
         updated_at: (document as any).updated_at || now
       };
 
-      const result = await this.collection<T>(collection).insertOne(docWithTimestamps as OptionalUnlessRequiredId<T>, options);
-      return { ...docWithTimestamps, _id: result.insertedId } as WithId<T>;
+      const result = await this.collection<T>(collection).insertOne(docWithTimestamps as any, options);
+      return { ...docWithTimestamps, _id: result.insertedId } as any;
     } catch (error) {
       logger.error('Database insertOne error', {
         collection,
@@ -127,9 +127,9 @@ export class DatabaseService {
    */
   async insertMany<T extends Document = Document>(
     collection: string,
-    documents: OptionalUnlessRequiredId<T>[],
+    documents: any[],
     options?: any
-  ): Promise<WithId<T>[]> {
+  ): Promise<any[]> {
     try {
       const now = new Date();
       const docsWithTimestamps = documents.map(doc => ({
@@ -138,11 +138,11 @@ export class DatabaseService {
         updated_at: (doc as any).updated_at || now
       }));
 
-      const result = await this.collection<T>(collection).insertMany(docsWithTimestamps as OptionalUnlessRequiredId<T>[], options);
+      const result = await this.collection<T>(collection).insertMany(docsWithTimestamps as any[], options);
       return docsWithTimestamps.map((doc, index) => ({
         ...doc,
         _id: result.insertedIds[index]
-      })) as WithId<T>[];
+      })) as any[];
     } catch (error) {
       logger.error('Database insertMany error', {
         collection,
