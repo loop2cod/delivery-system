@@ -17,8 +17,6 @@ import {
   PencilIcon,
   CheckIcon,
   XMarkIcon,
-  KeyIcon,
-  LockClosedIcon,
 } from '@heroicons/react/24/outline';
 
 const profileSchema = z.object({
@@ -36,17 +34,8 @@ const profileSchema = z.object({
   monthly_volume_estimate: z.number().min(0, 'Volume estimate must be positive').optional(),
 });
 
-const passwordResetSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
-  confirmPassword: z.string().min(8, 'Confirm password must be at least 8 characters'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
 
 type ProfileFormData = z.infer<typeof profileSchema>;
-type PasswordResetFormData = z.infer<typeof passwordResetSchema>;
 
 interface Company {
   id: string;
@@ -91,13 +80,11 @@ const INDUSTRIES = [
 ];
 
 export default function ProfilePage() {
-  const { } = useBusiness();
+  const { refreshProfileStatus } = useBusiness();
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showPasswordReset, setShowPasswordReset] = useState(false);
-  const [resettingPassword, setResettingPassword] = useState(false);
 
   const {
     register,
@@ -106,15 +93,6 @@ export default function ProfilePage() {
     formState: { errors, isDirty },
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
-  });
-
-  const {
-    register: registerPassword,
-    handleSubmit: handlePasswordSubmit,
-    reset: resetPassword,
-    formState: { errors: passwordErrors },
-  } = useForm<PasswordResetFormData>({
-    resolver: zodResolver(passwordResetSchema),
   });
 
   useEffect(() => {
@@ -149,7 +127,10 @@ export default function ProfilePage() {
       setCompany(updatedCompany);
       setIsEditing(false);
       
-      // Check if profile is now complete and trigger a context refresh
+      // Refresh the business context to update profile completion status
+      await refreshProfileStatus();
+      
+      // Check if profile is now complete
       const isProfileComplete = updatedCompany.street_address && 
                                updatedCompany.area && 
                                updatedCompany.city && 
@@ -158,8 +139,6 @@ export default function ProfilePage() {
       
       if (isProfileComplete) {
         toast.success('Company profile updated successfully! You can now start creating delivery requests.');
-        // Refresh the page to update the context
-        window.location.reload();
       } else {
         toast.success('Company profile updated successfully');
       }
@@ -182,33 +161,6 @@ export default function ProfilePage() {
     setIsEditing(false);
   };
 
-  const onPasswordReset = async (data: PasswordResetFormData) => {
-    console.log('dsdfd')
-    try {
-      setResettingPassword(true);
-      
-      const response = await axios.post('/api/business/reset-password', {
-        newPassword: data.newPassword,
-      });
-
-      if(response.data.success){
-        toast.success('Password reset successfully');
-      setShowPasswordReset(false);
-      resetPassword();
-      }
-    } catch (error: any) {
-      console.error('Failed to reset password:', error);
-      const message = error.response?.data?.error || 'Failed to reset password';
-      toast.error(message);
-    } finally {
-      setResettingPassword(false);
-    }
-  };
-
-  const handlePasswordResetCancel = () => {
-    setShowPasswordReset(false);
-    resetPassword();
-  };
 
   if (loading) {
     return (
@@ -538,98 +490,6 @@ export default function ProfilePage() {
                   <p className="mt-1 text-sm text-red-600">{errors.country.message}</p>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* Security Settings */}
-          <div className="bg-white shadow rounded-lg p-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-              <KeyIcon className="h-5 w-5 mr-2" />
-              Security Settings
-            </h3>
-            
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-900">Password</h4>
-                  <p className="text-sm text-gray-500">Change your account password</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordReset(true)}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  <LockClosedIcon className="h-4 w-4 mr-2" />
-                  Reset Password
-                </button>
-              </div>
-
-              {/* Password Reset Modal/Form */}
-              {showPasswordReset && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
-                  <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                      <LockClosedIcon className="h-5 w-5 mr-2" />
-                      Reset Password
-                    </h3>
-                    
-                    <form onSubmit={handlePasswordSubmit(onPasswordReset)} className="space-y-4">
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          New Password
-                        </label>
-                        <input
-                          {...registerPassword('newPassword')}
-                          type="password"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        />
-                        {passwordErrors.newPassword && (
-                          <p className="mt-1 text-sm text-red-600">{passwordErrors.newPassword.message}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Confirm New Password
-                        </label>
-                        <input
-                          {...registerPassword('confirmPassword')}
-                          type="password"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-                        />
-                        {passwordErrors.confirmPassword && (
-                          <p className="mt-1 text-sm text-red-600">{passwordErrors.confirmPassword.message}</p>
-                        )}
-                      </div>
-
-                      <div className="flex justify-end space-x-3 pt-4">
-                        <button
-                          type="button"
-                          onClick={handlePasswordResetCancel}
-                          className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={resettingPassword}
-                          className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {resettingPassword ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2 inline-block" />
-                              Resetting...
-                            </>
-                          ) : (
-                            'Reset Password'
-                          )}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 

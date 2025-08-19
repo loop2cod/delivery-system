@@ -35,6 +35,7 @@ interface BusinessContextType {
   logout: () => void;
   refreshToken: () => Promise<void>;
   updateProfile: (data: Partial<BusinessUser>) => Promise<void>;
+  refreshProfileStatus: () => Promise<void>;
 }
 
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
@@ -332,6 +333,46 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     }
   };
 
+  const refreshProfileStatus = async () => {
+    try {
+      const profileResponse = await axios.get('/api/business/profile');
+      const company = profileResponse.data.company;
+      
+      // Check if essential company information is complete
+      const isProfileIncomplete = !company.street_address || 
+                                 !company.area || 
+                                 !company.city || 
+                                 !company.contact_person || 
+                                 !company.phone;
+      
+      setRequiresProfileCompletion(isProfileIncomplete);
+      
+      // Update user context with latest company data if user exists
+      if (user) {
+        const updatedUser: BusinessUser = {
+          ...user,
+          email: company.email || user.email,
+          firstName: company.contact_person?.split(' ')[0] || user.firstName,
+          lastName: company.contact_person?.split(' ').slice(1).join(' ') || user.lastName,
+          company: {
+            id: company.id || user.company.id,
+            name: company.name || user.company.name,
+            industry: company.industry || user.company.industry,
+            address: company.street_address || user.company.address,
+            phone: company.phone || user.company.phone,
+            email: company.email || user.company.email,
+            website: company.website,
+            logo: company.logo,
+          },
+        };
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error('Failed to refresh profile status:', error);
+      throw error;
+    }
+  };
+
   const updateProfile = async (data: Partial<BusinessUser>) => {
     try {
       // Profile update not implemented yet
@@ -353,6 +394,7 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
     logout,
     refreshToken,
     updateProfile,
+    refreshProfileStatus,
   };
 
   return (
