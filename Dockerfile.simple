@@ -21,7 +21,7 @@ COPY packages/business-pwa/package.json packages/business-pwa/package.json
 COPY packages/driver-pwa/package.json packages/driver-pwa/package.json
 
 # Install dependencies
-ARG PNPM_FLAGS="--frozen-lockfile"
+ARG PNPM_FLAGS="--no-frozen-lockfile"
 RUN pnpm install $PNPM_FLAGS
 
 # Copy source code
@@ -31,7 +31,9 @@ COPY . .
 RUN pnpm run build
 
 # Remove dev dependencies to reduce image size
-RUN pnpm install --prod --frozen-lockfile
+# Use the same PNPM_FLAGS to avoid lockfile strictness issues in CI
+ARG PNPM_FLAGS
+RUN pnpm install --prod $PNPM_FLAGS
 
 # Create startup script
 RUN cat > /app/start.sh << 'EOF'

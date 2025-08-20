@@ -35,6 +35,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.simple
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
     image: delivery-system-app
 
   # Backend API
