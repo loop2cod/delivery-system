@@ -46,7 +46,7 @@ export default function TrackingPage() {
     try {
       const response = await fetch('/api/driver/deliveries', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('driver_token') : ''}`
         }
       });
 
@@ -75,7 +75,7 @@ export default function TrackingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('driver_token') : ''}`
         },
         body: JSON.stringify({
           latitude: location.latitude,
@@ -185,7 +185,8 @@ export default function TrackingPage() {
   };
 
   const getBatteryLevel = async (): Promise<number | null> => {
-    if ('getBattery' in navigator) {
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined' && 'navigator' in window && 'getBattery' in navigator) {
       try {
         const battery = await (navigator as any).getBattery();
         return battery.level * 100;
@@ -229,7 +230,7 @@ export default function TrackingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('driver_token')}`
+          'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('driver_token') : ''}`
         },
         body: JSON.stringify({
           routeId: state.currentRoute.id,
