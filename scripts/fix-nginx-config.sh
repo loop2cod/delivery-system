@@ -192,7 +192,23 @@ EOF
 
 echo -e "\n${YELLOW}Step 5: Test new configuration...${NC}"
 echo "Testing new nginx config syntax:"
-if docker run --rm -v "$PWD/nginx/nginx.conf.tmp:/etc/nginx/nginx.conf:ro" nginx:alpine nginx -t; then
+# Prefer testing inside the running nginx container to ensure proper DNS/network
+if docker ps --format '{{.Names}}' | grep -q '^grs-nginx$'; then
+    if docker exec grs-nginx nginx -t; then
+        test_ok=1
+    else
+        test_ok=0
+    fi
+else
+    # Fall back to a temp container attached to the compose network so upstream names resolve
+    if docker run --rm --network "$network_name" -v "$PWD/nginx/nginx.conf.tmp:/etc/nginx/nginx.conf:ro" nginx:alpine nginx -t; then
+        test_ok=1
+    else
+        test_ok=0
+    fi
+fi
+
+if [ "${test_ok:-0}" -eq 1 ]; then
     echo "✓ New nginx configuration is valid"
     
     echo -e "\n${YELLOW}Step 6: Apply new configuration...${NC}"
