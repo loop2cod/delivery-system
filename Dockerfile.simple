@@ -30,10 +30,8 @@ COPY . .
 # Build all packages
 RUN pnpm run build
 
-# Remove dev dependencies to reduce image size
-# Use the same PNPM_FLAGS to avoid lockfile strictness issues in CI
-ARG PNPM_FLAGS
-RUN pnpm install --prod $PNPM_FLAGS
+# NOTE: Skipping prod-only reinstall to preserve full workspace node_modules and avoid MODULE_NOT_FOUND
+# This can be optimized later via pnpm deploy per package
 
 # Create startup script
 RUN cat > /app/start.sh << 'EOF'
