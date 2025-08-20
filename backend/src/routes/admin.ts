@@ -92,7 +92,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         totalCompanies: stats[4],
         activeDeliveries: stats[5],
         todayDeliveries: stats[6],
-        totalRevenue: stats[7][0]?.total || 0
+        totalRevenue: (stats[7][0] as any)?.total || 0
       },
       recentActivity
     };
@@ -304,7 +304,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Convert MongoDB _id to id for frontend compatibility
     const updatedInquiry = {
       ...rawUpdatedInquiry,
-      id: rawUpdatedInquiry._id.toString(),
+      id: (rawUpdatedInquiry._id as any).toString(),
       _id: undefined
     };
     delete updatedInquiry._id;
@@ -349,12 +349,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
-      id: updatedDriver._id.toString(),
-      license_expiry: updatedDriver.license_expiry?.toISOString(),
-      joined_date: updatedDriver.joined_date?.toISOString(),
-      last_active: updatedDriver.last_active?.toISOString(),
-      created_at: updatedDriver.created_at?.toISOString(),
-      updated_at: updatedDriver.updated_at?.toISOString(),
+      id: (updatedDriver._id as any).toString(),
+      license_expiry: (updatedDriver as any).license_expiry?.toISOString(),
+      joined_date: (updatedDriver as any).joined_date?.toISOString(),
+      last_active: (updatedDriver as any).last_active?.toISOString(),
+      created_at: (updatedDriver as any).created_at?.toISOString(),
+      updated_at: (updatedDriver as any).updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
@@ -855,12 +855,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
-      id: updatedDriver._id.toString(),
-      license_expiry: updatedDriver.license_expiry?.toISOString(),
-      joined_date: updatedDriver.joined_date?.toISOString(),
-      last_active: updatedDriver.last_active?.toISOString(),
-      created_at: updatedDriver.created_at?.toISOString(),
-      updated_at: updatedDriver.updated_at?.toISOString(),
+      id: (updatedDriver._id as any).toString(),
+      license_expiry: (updatedDriver as any).license_expiry?.toISOString(),
+      joined_date: (updatedDriver as any).joined_date?.toISOString(),
+      last_active: (updatedDriver as any).last_active?.toISOString(),
+      created_at: (updatedDriver as any).created_at?.toISOString(),
+      updated_at: (updatedDriver as any).updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
@@ -905,12 +905,12 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Convert MongoDB _id to id for frontend compatibility and format dates
     const result = {
       ...updatedDriver,
-      id: updatedDriver._id.toString(),
-      license_expiry: updatedDriver.license_expiry?.toISOString(),
-      joined_date: updatedDriver.joined_date?.toISOString(),
-      last_active: updatedDriver.last_active?.toISOString(),
-      created_at: updatedDriver.created_at?.toISOString(),
-      updated_at: updatedDriver.updated_at?.toISOString(),
+      id: (updatedDriver._id as any).toString(),
+      license_expiry: (updatedDriver as any).license_expiry?.toISOString(),
+      joined_date: (updatedDriver as any).joined_date?.toISOString(),
+      last_active: (updatedDriver as any).last_active?.toISOString(),
+      created_at: (updatedDriver as any).created_at?.toISOString(),
+      updated_at: (updatedDriver as any).updated_at?.toISOString(),
       _id: undefined
     };
     delete result._id;
@@ -2364,7 +2364,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
     return {
       ...updatedRequest,
-      id: updatedRequest._id.toString(),
+      id: (updatedRequest._id as any).toString(),
       _id: undefined
     };
   }));
@@ -2443,7 +2443,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
       message: 'Driver assigned successfully',
       request: {
         ...updatedRequest,
-        id: updatedRequest._id.toString(),
+        id: (updatedRequest._id as any).toString(),
         _id: undefined
       },
       driver: {
@@ -2486,7 +2486,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         break;
     }
 
-    const filter = { ...dateFilter };
+    const filter: any = { ...dateFilter };
     if (companyId && ObjectId.isValid(companyId)) {
       filter.companyId = companyId;
     }
@@ -2557,10 +2557,10 @@ export async function adminRoutes(fastify: FastifyInstance) {
       }, {}),
       topCompanies: enrichedTopCompanies.filter(Boolean),
       revenue: {
-        total: revenueStats[0]?.totalRevenue || 0,
-        deliveredCount: revenueStats[0]?.count || 0,
-        averageValue: revenueStats[0]?.count > 0 
-          ? Math.round((revenueStats[0].totalRevenue || 0) / revenueStats[0].count) 
+        total: (revenueStats[0] as any)?.totalRevenue || 0,
+        deliveredCount: (revenueStats[0] as any)?.count || 0,
+        averageValue: (revenueStats[0] as any)?.count > 0 
+          ? Math.round(((revenueStats[0] as any).totalRevenue || 0) / (revenueStats[0] as any).count) 
           : 0
       }
     };

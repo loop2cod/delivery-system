@@ -131,8 +131,8 @@ export async function driverRoutes(fastify: FastifyInstance) {
     );
 
     return {
-      id: updatedRequest._id.toString(),
-      status: updatedRequest.status,
+      id: (updatedRequest._id as any).toString(),
+      status: (updatedRequest as any).status,
       message: 'Assignment accepted successfully'
     };
   }));
@@ -190,8 +190,8 @@ export async function driverRoutes(fastify: FastifyInstance) {
     );
 
     return {
-      id: updatedRequest._id.toString(),
-      status: updatedRequest.status,
+      id: (updatedRequest._id as any).toString(),
+      status: (updatedRequest as any).status,
       message: 'Delivery completed successfully'
     };
   }));
@@ -259,8 +259,8 @@ export async function driverRoutes(fastify: FastifyInstance) {
     );
 
     return {
-      id: updatedDriver._id.toString(),
-      status: updatedDriver.status,
+      id: (updatedDriver._id as any).toString(),
+      status: (updatedDriver as any).status,
       message: 'Status updated successfully'
     };
   }));

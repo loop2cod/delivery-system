@@ -493,7 +493,7 @@ export async function businessRoutes(fastify: FastifyInstance) {
       // Convert MongoDB document to frontend format
       const companyData = {
         ...updatedCompany,
-        id: updatedCompany._id.toString(),
+        id: (updatedCompany._id as any).toString(),
         _id: undefined
       };
       delete companyData._id;

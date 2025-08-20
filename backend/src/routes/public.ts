@@ -133,7 +133,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
 
     // Check cache first
     const cacheKey = `inquiry_status:${referenceNumber}`;
-    let inquiry = await redis.get(cacheKey, true);
+    let inquiry: any = await redis.get(cacheKey, true);
 
     if (!inquiry) {
       // Fetch from database using the reference_number field
@@ -206,7 +206,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
 
     // Check cache first
     const cacheKey = cacheUtils.keys.package(packageCode);
-    let packageData = await redis.get(cacheKey, true);
+    let packageData: any = await redis.get(cacheKey, true);
 
     if (!packageData) {
       // Fetch from database using MongoDB
@@ -293,7 +293,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
     // Cache this data as it changes infrequently
     const cacheKey = 'service_areas';
-    let serviceAreas = await redis.get(cacheKey, true);
+    let serviceAreas: any = await redis.get(cacheKey, true);
 
     if (!serviceAreas) {
       // This would normally come from database, but we'll use constants for now
@@ -495,7 +495,7 @@ export async function publicRoutes(fastify: FastifyInstance) {
   }, asyncHandler(async (request: FastifyRequest, reply: FastifyReply) => {
     // Cache company info as it rarely changes
     const cacheKey = 'company_info';
-    let companyInfo = await redis.get(cacheKey, true);
+    let companyInfo: any = await redis.get(cacheKey, true);
 
     if (!companyInfo) {
       companyInfo = {

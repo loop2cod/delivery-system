@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import * as jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { UserRole, UserStatus } from '../models/User';
 import { redis, cacheUtils } from '../config/redis';
@@ -277,10 +277,10 @@ export class AuthService {
     refreshToken: string;
   }> {
     // Generate JWT token
-    const payload = { userId };
+    const payload = { userId: userId.toString() };
     const token = jwt.sign(payload, config.JWT_SECRET as string, {
-      expiresIn: config.JWT_EXPIRES_IN as string
-    });
+      expiresIn: config.JWT_EXPIRES_IN
+    } as jwt.SignOptions);
 
     // Generate refresh token
     const refreshToken = randomBytes(32).toString('hex');

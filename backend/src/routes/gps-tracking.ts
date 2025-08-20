@@ -168,19 +168,18 @@ export async function gpsTrackingRoutes(fastify: FastifyInstance) {
       }
 
       // Process batch location updates
+      const timestamp = Date.now();
       const locationIds = await Promise.all(
-        locations.map(location => storeLocationUpdate(user.id, { ...location, deliveryId, metadata }))
+        locations.map(location => storeLocationUpdate(user.id, { ...location, deliveryId, metadata, timestamp }))
       );
 
       // Update driver's current location with the most recent location
-      const latestLocation = locations.reduce((latest, current) => 
-        current.timestamp > latest.timestamp ? current : latest
-      );
-      await updateDriverCurrentLocation(user.id, { ...latestLocation, deliveryId, metadata });
+      const latestLocation = locations[locations.length - 1]; // Use last location in array
+      await updateDriverCurrentLocation(user.id, { ...latestLocation, deliveryId, metadata, timestamp });
 
       // If delivery ID provided, update delivery tracking
       if (deliveryId) {
-        await updateDeliveryLocation(deliveryId, user.id, { ...latestLocation, deliveryId, metadata });
+        await updateDeliveryLocation(deliveryId, user.id, { ...latestLocation, deliveryId, metadata, timestamp });
       }
 
       reply.send({

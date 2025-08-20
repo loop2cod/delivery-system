@@ -19,7 +19,13 @@ export interface DeliveryPricingData {
   updatedAt: Date;
 }
 
-export interface IDeliveryPricing extends DeliveryPricingData, Document {}
+export interface IDeliveryPricing extends DeliveryPricingData, Document {
+  calculatePrice(weight: number): number;
+}
+
+export interface IDeliveryPricingModel extends mongoose.Model<IDeliveryPricing> {
+  getPricingForCompany(companyId?: string): Promise<IDeliveryPricing | null>;
+}
 
 const PricingTierSchema = new Schema({
   minWeight: {
@@ -182,4 +188,4 @@ DeliveryPricingSchema.statics.getPricingForCompany = async function(companyId?: 
   });
 };
 
-export const DeliveryPricing = mongoose.model<IDeliveryPricing>('DeliveryPricing', DeliveryPricingSchema);
+export const DeliveryPricing = mongoose.model<IDeliveryPricing, IDeliveryPricingModel>('DeliveryPricing', DeliveryPricingSchema);
