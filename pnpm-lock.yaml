@@ -214,6 +214,9 @@ importers:
       next:
         specifier: 14.0.4
         version: 14.0.4(@babel/core@7.28.0)(react-dom@18.2.0)(react@18.2.0)
+      next-pwa:
+        specifier: ^5.6.0
+        version: 5.6.0(@babel/core@7.28.0)(next@14.0.4)(webpack@5.100.2)
       postcss:
         specifier: ^8.4.32
         version: 8.4.32
@@ -9700,6 +9703,7 @@ packages:
   /source-map@0.8.0-beta.0:
     resolution: {integrity: sha512-2ymg6oRBpebeZi9UUNsgQ89bhx01TcTkmNTGnNO88imTmbSgy4nfujrgVEFKWpMTEGA11EDkTt7mqObTPdigIA==}
     engines: {node: '>= 8'}
+    deprecated: The work that was done in this beta branch won't be included in future versions
     dependencies:
       whatwg-url: 7.1.0
     dev: false

@@ -43,10 +43,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      API_HOST: 0.0.0.0
+      API_PORT: 3000
       MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-admin}:${MONGO_ROOT_PASSWORD:-password123}@mongodb:27017/${MONGO_DB_NAME:-grs_delivery}?authSource=admin
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-this}
-      CORS_ORIGIN: https://grsdeliver.com,https://admin.grsdeliver.com,https://business.grsdeliver.com,https://driver.grsdeliver.com
+      COOKIE_SECRET: ${COOKIE_SECRET:-your-super-secret-cookie-key-change-this}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-BADdgsc8VG_REsV-xioz8NR_RT2F1o7aSzidDvAD6Ok89kQQAItcHBPLWOMVNmrdcm4CzNwB9g070l1W82BZn-4}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-g4q93Hx9Pzp1npudzGyih4HdQond28ESGCR-bzuoVj0}
+      CORS_ORIGINS: https://grsdeliver.com,https://admin.grsdeliver.com,https://business.grsdeliver.com,https://driver.grsdeliver.com
     ports:
       - "3000:3000"
     depends_on:
