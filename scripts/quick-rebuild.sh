@@ -27,11 +27,11 @@ docker image rm -f delivery-system-backend delivery-system-public-pwa delivery-s
 echo "Step 3: Building with no cache..."
 $DC build --no-cache
 
-echo "Step 4: Starting databases first..."
-$DC up -d mongodb redis
+echo "Step 4: Starting Redis..."
+$DC up -d redis
 
-echo "Waiting 30 seconds for databases..."
-sleep 30
+echo "Waiting 10 seconds for Redis..."
+sleep 10
 
 echo "Step 5: Starting backend..."
 $DC up -d backend
