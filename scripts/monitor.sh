@@ -32,7 +32,7 @@ print_status() {
 check_containers() {
     echo -e "\n${BLUE}=== Docker Containers ===${NC}"
     
-    local containers=("delivery-mongodb" "delivery-redis" "delivery-backend")
+    local containers=("grs-mongodb" "grs-redis" "grs-backend")
     
     for container in "${containers[@]}"; do
         if docker ps --format "{{.Names}}" | grep -q "$container"; then
@@ -82,14 +82,14 @@ check_databases() {
     echo -e "\n${BLUE}=== Database Connectivity ===${NC}"
     
     # MongoDB
-    if docker exec delivery-mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
+    if docker exec grs-mongodb mongosh --eval "db.adminCommand('ping')" > /dev/null 2>&1; then
         print_status "OK" "MongoDB is accessible"
     else
         print_status "ERROR" "MongoDB is not accessible"
     fi
     
     # Redis
-    if docker exec delivery-redis redis-cli ping > /dev/null 2>&1; then
+    if docker exec grs-redis redis-cli -a redis123 ping > /dev/null 2>&1; then
         print_status "OK" "Redis is accessible"
     else
         print_status "ERROR" "Redis is not accessible"

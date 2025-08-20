@@ -180,7 +180,7 @@ $DC up -d backend
 echo "  Waiting for backend (10s)..."
 sleep 10
 
-# Start frontend applications
+# Start frontend applications (only in prod mode or if they exist in compose file)
 if [[ "$MODE" == "prod" ]]; then
     echo "  Starting PWA applications..."
     $DC up -d public-pwa admin-pwa business-pwa driver-pwa
@@ -190,6 +190,10 @@ if [[ "$MODE" == "prod" ]]; then
     # Start nginx
     echo "  Starting nginx..."
     $DC up -d nginx
+else
+    # In dev mode, only start PWAs if they're not disabled by profiles
+    echo "  Starting PWA applications (dev mode)..."
+    $DC up -d public-pwa admin-pwa business-pwa driver-pwa 2>/dev/null || echo "  PWAs disabled in dev mode"
 fi
 
 # Step 7: Health check
