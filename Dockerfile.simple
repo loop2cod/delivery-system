@@ -38,16 +38,21 @@ RUN cat > /app/start.sh << 'EOF'
 #!/bin/bash
 
 # Setup environment
-if [ "$NODE_ENV" = "production" ]; then
-    # Ensure .env for backend at /app/backend/.env (environment.js loads this path)
-    if [ -f "/app/.env.production" ]; then
-        mkdir -p /app/backend
+# Ensure backend env for all modes. Priority: backend/.env > /app/.env > /app/.env.production
+mkdir -p /app/backend /app/logs /app/uploads
+if [ ! -f "/app/backend/.env" ]; then
+    if [ -f "/app/.env" ]; then
+        cp /app/.env /app/backend/.env
+        echo "Copied /app/.env to /app/backend/.env"
+    elif [ -f "/app/.env.production" ]; then
         cp /app/.env.production /app/backend/.env
-        # Also keep a root .env for PWAs if they need it
-        cp /app/.env.production /app/.env
-        echo "Copied .env.production to /app/backend/.env and /app/.env"
+        echo "Copied /app/.env.production to /app/backend/.env"
     fi
-    mkdir -p /app/logs /app/uploads
+fi
+# Also keep a root .env for PWAs if missing
+if [ ! -f "/app/.env" ] && [ -f "/app/.env.production" ]; then
+    cp /app/.env.production /app/.env
+    echo "Created /app/.env from .env.production"
 fi
 
 # Start the appropriate service based on SERVICE_NAME
