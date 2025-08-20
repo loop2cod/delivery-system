@@ -1,0 +1,80 @@
+# Simpler Single-stage Dockerfile for UAE Delivery Management System
+# This approach uses a simpler single-stage build to avoid node_modules issues
+
+FROM node:18-alpine
+
+# Install pnpm and dumb-init
+RUN npm install -g pnpm@8.6.10 && apk add --no-cache dumb-init bash
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY turbo.json ./
+
+# Copy all package.json files
+COPY backend/package.json backend/package.json
+COPY packages/public-pwa/package.json packages/public-pwa/package.json
+COPY packages/admin-pwa/package.json packages/admin-pwa/package.json
+COPY packages/business-pwa/package.json packages/business-pwa/package.json
+COPY packages/driver-pwa/package.json packages/driver-pwa/package.json
+
+# Install dependencies
+ARG PNPM_FLAGS="--frozen-lockfile"
+RUN pnpm install $PNPM_FLAGS
+
+# Copy source code
+COPY . .
+
+# Build all packages
+RUN pnpm run build
+
+# Remove dev dependencies to reduce image size
+RUN pnpm install --prod --frozen-lockfile
+
+# Create startup script
+RUN cat > /app/start.sh << 'EOF'
+#!/bin/bash
+
+# Setup environment
+if [ "$NODE_ENV" = "production" ]; then
+    if [ -f ".env.production" ]; then
+        cp .env.production .env
+    fi
+    mkdir -p logs uploads
+fi
+
+# Start the appropriate service based on SERVICE_NAME
+case "$SERVICE_NAME" in
+    "backend")
+        echo "Starting backend service..."
+        cd /app && node backend/dist/server.js
+        ;;
+    "public-pwa")
+        echo "Starting public PWA..."
+        cd /app/packages/public-pwa && npm start
+        ;;
+    "admin-pwa")
+        echo "Starting admin PWA..."
+        cd /app/packages/admin-pwa && npm start
+        ;;
+    "business-pwa")
+        echo "Starting business PWA..."
+        cd /app/packages/business-pwa && npm start
+        ;;
+    "driver-pwa")
+        echo "Starting driver PWA..."
+        cd /app/packages/driver-pwa && npm start
+        ;;
+    *)
+        echo "Unknown service: $SERVICE_NAME"
+        exit 1
+        ;;
+esac
+EOF
+
+RUN chmod +x /app/start.sh
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["/app/start.sh"]
