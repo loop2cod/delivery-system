@@ -39,16 +39,24 @@ RUN cat > /app/start.sh << 'EOF'
 
 # Setup environment
 if [ "$NODE_ENV" = "production" ]; then
-    if [ -f ".env.production" ]; then
-        cp .env.production .env
+    # Ensure .env for backend at /app/backend/.env (environment.js loads this path)
+    if [ -f "/app/.env.production" ]; then
+        mkdir -p /app/backend
+        cp /app/.env.production /app/backend/.env
+        # Also keep a root .env for PWAs if they need it
+        cp /app/.env.production /app/.env
+        echo "Copied .env.production to /app/backend/.env and /app/.env"
     fi
-    mkdir -p logs uploads
+    mkdir -p /app/logs /app/uploads
 fi
 
 # Start the appropriate service based on SERVICE_NAME
 case "$SERVICE_NAME" in
     "backend")
         echo "Starting backend service..."
+        # Quick visibility for required vars
+        echo "COOKIE_SECRET present: $( [ -n "$COOKIE_SECRET" ] && echo yes || (grep -q '^COOKIE_SECRET=' /app/backend/.env 2>/dev/null && echo yes || echo no) )"
+        echo "JWT_SECRET present: $( [ -n "$JWT_SECRET" ] && echo yes || (grep -q '^JWT_SECRET=' /app/backend/.env 2>/dev/null && echo yes || echo no) )"
         cd /app && node backend/dist/server.js
         ;;
     "public-pwa")
