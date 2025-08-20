@@ -69,10 +69,10 @@ export const config = {
     'http://localhost:3002', 
     'http://localhost:3003',
     'http://localhost:3004',
-    'https://deliveryuae.com',
-    'https://admin.deliveryuae.com',
-    'https://business.deliveryuae.com',
-    'https://driver.deliveryuae.com'
+    'https://grsdeliver.com',
+    'https://admin.grsdeliver.com',
+    'https://business.grsdeliver.com',
+    'https://driver.grsdeliver.com'
   ],
 
   // PWA Configuration
