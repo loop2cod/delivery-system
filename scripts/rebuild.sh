@@ -15,14 +15,14 @@ NC='\033[0m'
 # Configuration
 MODE="dev"
 CLEAN_BUILD=false
-DOCKER_COMPOSE_FILE="docker-compose.dev.yml"
+DOCKER_COMPOSE_FILE="docker-compose.yml -f docker-compose.dev.yml"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         --dev)
             MODE="dev"
-            DOCKER_COMPOSE_FILE="docker-compose.dev.yml"
+            DOCKER_COMPOSE_FILE="docker-compose.yml -f docker-compose.dev.yml"
             shift
             ;;
         --prod)
