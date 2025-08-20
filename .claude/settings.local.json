@@ -76,7 +76,8 @@
       "Bash(do sed -i '' 's/request\\.user/request.currentUser/g' \"$file\")",
       "Bash(done)",
       "Bash(ssh:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(docker:*)"
     ],
     "deny": []
   }

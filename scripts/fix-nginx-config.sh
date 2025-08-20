@@ -43,17 +43,21 @@ docker network inspect "$network_name" | grep -A 1 "Name.*grs-" | grep Name || e
 echo -e "\n${YELLOW}Step 3: Test container connectivity...${NC}"
 echo "Testing if containers can reach each other:"
 
-containers=("grs-backend" "grs-public-pwa" "grs-admin-pwa" "grs-business-pwa" "grs-driver-pwa")
-for container in "${containers[@]}"; do
-    echo -n "Testing $container: "
-    if docker exec grs-mongodb nslookup "${container#grs-}" 2>/dev/null >/dev/null; then
-        echo "✓ Can resolve ${container#grs-}"
-    elif docker exec grs-mongodb nslookup "$container" 2>/dev/null >/dev/null; then
-        echo "✓ Can resolve $container"
-    else
-        echo "✗ Cannot resolve ${container#grs-} or $container"
-    fi
-done
+# Test DNS resolution from within the nginx container (same network)
+services=("backend:3000" "public-pwa:3001" "admin-pwa:3002" "business-pwa:3003" "driver-pwa:3004")
+if docker ps --format '{{.Names}}' | grep -q '^grs-nginx$'; then
+    for svc in "${services[@]}"; do
+        name="${svc%%:*}"; port="${svc##*:}"
+        echo -n "Testing $name:$port from grs-nginx: "
+        if docker exec grs-nginx sh -c "ping -c1 -W2 $name >/dev/null 2>&1"; then
+            echo "✓ resolves"
+        else
+            echo "✗ cannot resolve"
+        fi
+    done
+else
+    echo "grs-nginx not running; skipping reachability tests"
+fi
 
 echo -e "\n${YELLOW}Step 4: Create temporary nginx config fix...${NC}"
 echo "Backing up original nginx config..."
@@ -69,25 +73,25 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
 
-    # Upstream servers - using container names from same network
-    upstream backend_servers {
-        server grs-backend:3000;
+    # Upstream servers - use Docker Compose service names (stable DNS on the network)
+    upstream backend {
+        server backend:3000;
     }
     
-    upstream public_servers {
-        server grs-public-pwa:3001;
+    upstream public_pwa {
+        server public-pwa:3001;
     }
     
-    upstream admin_servers {
-        server grs-admin-pwa:3002;
+    upstream admin_pwa {
+        server admin-pwa:3002;
     }
     
-    upstream business_servers {
-        server grs-business-pwa:3003;
+    upstream business_pwa {
+        server business-pwa:3003;
     }
     
-    upstream driver_servers {
-        server grs-driver-pwa:3004;
+    upstream driver_pwa {
+        server driver-pwa:3004;
     }
 
     # Main domain - grsdeliver.com
@@ -100,7 +104,7 @@ http {
         ssl_certificate_key /etc/nginx/ssl/grsdeliver.com.key;
         
         location / {
-            proxy_pass http://public_servers;
+            proxy_pass http://public_pwa;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -118,7 +122,7 @@ http {
         ssl_certificate_key /etc/nginx/ssl/api.grsdeliver.com.key;
         
         location / {
-            proxy_pass http://backend_servers;
+            proxy_pass http://backend;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -136,7 +140,7 @@ http {
         ssl_certificate_key /etc/nginx/ssl/admin.grsdeliver.com.key;
         
         location / {
-            proxy_pass http://admin_servers;
+            proxy_pass http://admin_pwa;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -154,7 +158,7 @@ http {
         ssl_certificate_key /etc/nginx/ssl/business.grsdeliver.com.key;
         
         location / {
-            proxy_pass http://business_servers;
+            proxy_pass http://business_pwa;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -172,7 +176,7 @@ http {
         ssl_certificate_key /etc/nginx/ssl/driver.grsdeliver.com.key;
         
         location / {
-            proxy_pass http://driver_servers;
+            proxy_pass http://driver_pwa;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
