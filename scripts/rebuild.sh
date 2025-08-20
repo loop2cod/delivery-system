@@ -86,13 +86,37 @@ fi
 
 # Step 3: Build dependencies
 echo -e "${YELLOW}Step 3: Installing dependencies...${NC}"
+
+# Check and install pnpm if needed
+install_pnpm() {
+    if ! command -v pnpm &> /dev/null; then
+        echo "  Installing pnpm..."
+        if command -v npm &> /dev/null; then
+            npm install -g pnpm
+        else
+            echo "  ERROR: npm not found. Cannot install pnpm."
+            return 1
+        fi
+    fi
+}
+
 if [[ -f "pnpm-lock.yaml" ]]; then
-    echo "  Installing pnpm dependencies..."
-    pnpm install
+    install_pnpm
+    if command -v pnpm &> /dev/null; then
+        echo "  Installing pnpm dependencies..."
+        pnpm install
+    else
+        echo "  Falling back to npm..."
+        npm install
+    fi
 elif [[ -f "package-lock.json" ]]; then
     echo "  Installing npm dependencies..."
     npm install
 elif [[ -f "yarn.lock" ]]; then
+    if ! command -v yarn &> /dev/null; then
+        echo "  Installing yarn..."
+        npm install -g yarn
+    fi
     echo "  Installing yarn dependencies..."
     yarn install
 else
@@ -101,12 +125,32 @@ fi
 
 # Step 4: Build TypeScript/assets
 echo -e "${YELLOW}Step 4: Building application assets...${NC}"
-if [[ "$MODE" == "dev" ]]; then
-    echo "  Running development build..."
-    pnpm run build 2>/dev/null || npm run build 2>/dev/null || echo "  No build script found"
+
+# Determine which package manager to use for build
+get_package_manager() {
+    if [[ -f "pnpm-lock.yaml" ]] && command -v pnpm &> /dev/null; then
+        echo "pnpm"
+    elif [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
+        echo "yarn"
+    elif command -v npm &> /dev/null; then
+        echo "npm"
+    else
+        echo ""
+    fi
+}
+
+PM=$(get_package_manager)
+
+if [[ -n "$PM" ]]; then
+    if [[ "$MODE" == "dev" ]]; then
+        echo "  Running development build with $PM..."
+        $PM run build 2>/dev/null || echo "  No build script found"
+    else
+        echo "  Running production build with $PM..."
+        NODE_ENV=production $PM run build 2>/dev/null || echo "  No build script found"
+    fi
 else
-    echo "  Running production build..."
-    NODE_ENV=production pnpm run build 2>/dev/null || NODE_ENV=production npm run build 2>/dev/null || echo "  No build script found"
+    echo "  No package manager available, skipping build"
 fi
 
 # Step 5: Build Docker images
