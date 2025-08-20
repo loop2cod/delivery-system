@@ -55,12 +55,11 @@ CMD ["sh", "-c", "./scripts/setup-production-env.sh && node backend/dist/server.
 # Public PWA production stage
 FROM node:18-alpine AS public-pwa
 RUN apk add --no-cache dumb-init
+WORKDIR /app
+# Copy the entire workspace root node_modules (contains hoisted dependencies)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/public-pwa ./packages/public-pwa
 WORKDIR /app/packages/public-pwa
-COPY --from=builder /app/packages/public-pwa/.next ./.next
-COPY --from=builder /app/packages/public-pwa/package.json ./
-COPY --from=builder /app/packages/public-pwa/next.config.js ./
-COPY --from=builder /app/packages/public-pwa/node_modules ./node_modules
-COPY --from=builder /app/packages/public-pwa/public ./public
 EXPOSE 3001
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "start"]
@@ -68,12 +67,11 @@ CMD ["npm", "start"]
 # Admin PWA production stage
 FROM node:18-alpine AS admin-pwa
 RUN apk add --no-cache dumb-init
+WORKDIR /app
+# Copy the entire workspace root node_modules (contains hoisted dependencies)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/admin-pwa ./packages/admin-pwa
 WORKDIR /app/packages/admin-pwa
-COPY --from=builder /app/packages/admin-pwa/.next ./.next
-COPY --from=builder /app/packages/admin-pwa/package.json ./
-COPY --from=builder /app/packages/admin-pwa/next.config.js ./
-COPY --from=builder /app/packages/admin-pwa/node_modules ./node_modules
-COPY --from=builder /app/packages/admin-pwa/public ./public
 EXPOSE 3002
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "start"]
@@ -81,12 +79,11 @@ CMD ["npm", "start"]
 # Business PWA production stage
 FROM node:18-alpine AS business-pwa
 RUN apk add --no-cache dumb-init
+WORKDIR /app
+# Copy the entire workspace root node_modules (contains hoisted dependencies)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/business-pwa ./packages/business-pwa
 WORKDIR /app/packages/business-pwa
-COPY --from=builder /app/packages/business-pwa/.next ./.next
-COPY --from=builder /app/packages/business-pwa/package.json ./
-COPY --from=builder /app/packages/business-pwa/next.config.js ./
-COPY --from=builder /app/packages/business-pwa/node_modules ./node_modules
-COPY --from=builder /app/packages/business-pwa/public ./public
 EXPOSE 3003
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "start"]
@@ -94,12 +91,11 @@ CMD ["npm", "start"]
 # Driver PWA production stage
 FROM node:18-alpine AS driver-pwa
 RUN apk add --no-cache dumb-init
+WORKDIR /app
+# Copy the entire workspace root node_modules (contains hoisted dependencies)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/driver-pwa ./packages/driver-pwa
 WORKDIR /app/packages/driver-pwa
-COPY --from=builder /app/packages/driver-pwa/.next ./.next
-COPY --from=builder /app/packages/driver-pwa/package.json ./
-COPY --from=builder /app/packages/driver-pwa/next.config.js ./
-COPY --from=builder /app/packages/driver-pwa/node_modules ./node_modules
-COPY --from=builder /app/packages/driver-pwa/public ./public
 EXPOSE 3004
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["npm", "start"]
