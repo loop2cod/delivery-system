@@ -20,8 +20,13 @@ echo "=== Step 1: Stop all containers ==="
 docker-compose down
 echo
 
-echo "=== Step 2: Clean up dangling images and containers ==="
+echo "=== Step 2: Clean up and rebuild images ==="
+# Remove specific images to force rebuild
+docker image rm -f delivery-system-backend delivery-system-public-pwa delivery-system-admin-pwa delivery-system-business-pwa delivery-system-driver-pwa 2>/dev/null || true
 docker system prune -f
+
+echo "=== Step 2b: Rebuild containers with fixed dependencies ==="
+docker-compose build --no-cache
 echo
 
 echo "=== Step 3: Check environment file ==="

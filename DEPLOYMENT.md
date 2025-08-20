@@ -1,10 +1,18 @@
 # Deployment Instructions
 
-## Container Restart Issues - Fixed
+## Container Restart Issues - CRITICAL FIX APPLIED
+
+**ISSUE IDENTIFIED:** Containers failing with "Cannot find module" errors because `node_modules` are missing in production containers.
+
+**ROOT CAUSE:** The Docker build process wasn't properly copying production dependencies to the production stages.
+
+**SOLUTION:** Updated Dockerfile to create a separate production dependencies stage and copy `node_modules` from the correct build stage.
 
 The containers were restarting due to several configuration mismatches that have been resolved:
 
 ### 1. Docker Configuration Issues Fixed:
+- ✅ **CRITICAL:** Fixed missing `node_modules` in production containers
+- ✅ Added separate production dependencies build stage
 - ✅ Fixed shell execution error by updating CMD structure
 - ✅ Added proper working directories for each PWA
 - ✅ Included missing `next.config.js` files
@@ -16,26 +24,25 @@ The containers were restarting due to several configuration mismatches that have
 - ✅ Updated backend to handle both `MONGODB_URL` and `MONGODB_URI`
 - ✅ Added environment setup script for production
 
-### 3. Quick Fix on Server:
+### 3. IMMEDIATE FIX on Server:
 
-To resolve the current container restart issues, run these commands on the server:
+**CRITICAL:** The current containers are failing due to missing `node_modules`. You MUST rebuild the images with the fixed Dockerfile.
 
 ```bash
 # Navigate to the project directory
 cd /root/delivery-system
 
-# Stop all containers
-docker-compose down
+# OPTION 1: Quick rebuild (recommended)
+./scripts/quick-rebuild.sh
 
-# Pull the latest changes (if using git)
-git pull origin main
-
-# Run the fix script
+# OPTION 2: Manual fix if quick rebuild doesn't work
 ./scripts/fix-containers.sh
 
-# If that doesn't work, run the debug script to see detailed logs
+# OPTION 3: If issues persist, debug first
 ./scripts/debug-containers.sh
 ```
+
+**Important:** You must rebuild the Docker images - restarting containers won't fix this issue.
 
 ### 4. Manual Fix Steps:
 
