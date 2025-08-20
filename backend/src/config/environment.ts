@@ -13,7 +13,7 @@ export const config = {
   API_PORT: parseInt(process.env.API_PORT || '3000', 10),
 
   // MongoDB Configuration
-  MONGODB_URL: process.env.MONGODB_URL || process.env.MONGODB_URI || 'mongodb://localhost:27017/delivery_uae_dev',
+  MONGODB_URL: process.env.MONGODB_URL,
   MONGODB_HOST: process.env.MONGODB_HOST || 'localhost',
   MONGODB_PORT: parseInt(process.env.MONGODB_PORT || '27017', 10),
   MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'delivery_uae_dev',
