@@ -32,10 +32,10 @@ export function PWAProvider({ children }: { children: React.ReactNode }) {
   // Check online/offline status
   useEffect(() => {
     const updateOnlineStatus = () => {
-      setIsOnline(navigator.onLine);
+      setIsOnline(typeof window !== 'undefined' ? navigator.onLine : true);
     };
 
-    setIsOnline(navigator.onLine);
+    setIsOnline(typeof window !== 'undefined' ? navigator.onLine : true);
     
     window.addEventListener('online', updateOnlineStatus);
     window.addEventListener('offline', updateOnlineStatus);

@@ -217,8 +217,8 @@ export default function NavigationPage() {
     const [lng, lat] = coordinates;
     
     // Try to open in native maps app
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
+    const isIOS = typeof window !== 'undefined' ? /iPad|iPhone|iPod/.test(navigator.userAgent) : false;
+    const isAndroid = typeof window !== 'undefined' ? /Android/.test(navigator.userAgent) : false;
     
     if (isIOS) {
       window.open(`maps://maps.google.com/maps?daddr=${lat},${lng}&amp;ll=`);

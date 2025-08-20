@@ -37,7 +37,7 @@ export default function LiveTracking({
     locationUpdates: 0
   });
   const [lastUpdateTime, setLastUpdateTime] = useState<number>(0);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOnline, setIsOnline] = useState(typeof window !== 'undefined' ? navigator.onLine : true);
   const [settings] = useState({
     highAccuracy: true,
     updateInterval: 5000,

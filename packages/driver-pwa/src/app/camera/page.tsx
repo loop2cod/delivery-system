@@ -40,6 +40,8 @@ export default function CameraPage() {
   const inProgressAssignments = assignments.filter(a => a.status === 'IN_PROGRESS');
 
   const startCamera = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -55,7 +57,7 @@ export default function CameraPage() {
       }
 
       // Get current location
-      if (navigator.geolocation) {
+      if (typeof window !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             setCurrentLocation({

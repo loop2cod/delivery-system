@@ -19,7 +19,7 @@ export default function ScanPage() {
 
   useEffect(() => {
     // Check if device has flash
-    if (navigator.mediaDevices && navigator.mediaDevices.getSupportedConstraints) {
+    if (typeof window !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getSupportedConstraints) {
       const constraints = navigator.mediaDevices.getSupportedConstraints();
       setHasFlash(!!(constraints as any).torch);
     }
