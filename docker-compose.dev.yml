@@ -9,7 +9,7 @@ services:
     build:
       context: .
       target: base
-    command: pnpm run dev:backend
+    command: sh -c "cd backend && npm run dev"
     volumes:
       - ./backend:/app/backend
       - /app/backend/node_modules
@@ -29,7 +29,7 @@ services:
     build:
       context: .
       target: base
-    command: pnpm run dev:public
+    command: sh -c "cd packages/public-pwa && npm run dev"
     volumes:
       - ./packages/public-pwa:/app/packages/public-pwa
       - /app/packages/public-pwa/node_modules
@@ -44,7 +44,7 @@ services:
     build:
       context: .
       target: base
-    command: pnpm run dev:admin
+    command: sh -c "cd packages/admin-pwa && npm run dev"
     volumes:
       - ./packages/admin-pwa:/app/packages/admin-pwa
       - /app/packages/admin-pwa/node_modules
@@ -59,7 +59,7 @@ services:
     build:
       context: .
       target: base
-    command: pnpm run dev:business
+    command: sh -c "cd packages/business-pwa && npm run dev"
     volumes:
       - ./packages/business-pwa:/app/packages/business-pwa
       - /app/packages/business-pwa/node_modules
@@ -74,7 +74,7 @@ services:
     build:
       context: .
       target: base
-    command: pnpm run dev:driver
+    command: sh -c "cd packages/driver-pwa && npm run dev"
     volumes:
       - ./packages/driver-pwa:/app/packages/driver-pwa
       - /app/packages/driver-pwa/node_modules
