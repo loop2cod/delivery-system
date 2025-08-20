@@ -33,14 +33,17 @@ RUN pnpm run build
 
 # Backend production stage
 FROM node:18-alpine AS backend
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init bash
 WORKDIR /app
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/backend/package.json ./backend/
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
+COPY --from=builder /app/.env.production ./.env.production
+COPY --from=builder /app/scripts/setup-production-env.sh ./scripts/setup-production-env.sh
+RUN chmod +x ./scripts/setup-production-env.sh
 EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "backend/dist/server.js"]
+CMD ["sh", "-c", "./scripts/setup-production-env.sh && node backend/dist/server.js"]
 
 # Public PWA production stage
 FROM node:18-alpine AS public-pwa

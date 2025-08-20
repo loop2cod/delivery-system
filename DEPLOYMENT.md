@@ -1,292 +1,164 @@
-# GRS Delivery System - Deployment Guide
+# Deployment Instructions
 
-This guide will help you deploy the GRS Delivery Management System on your KVM VPS with the following subdomain structure:
+## Container Restart Issues - Fixed
 
-- **grsdeliver.com** - Public customer-facing PWA
-- **admin.grsdeliver.com** - Admin control panel
-- **business.grsdeliver.com** - Business partner portal
-- **driver.grsdeliver.com** - Driver mobile app
-- **api.grsdeliver.com** - Backend API
+The containers were restarting due to several configuration mismatches that have been resolved:
 
-## Prerequisites
+### 1. Docker Configuration Issues Fixed:
+- ✅ Fixed shell execution error by updating CMD structure
+- ✅ Added proper working directories for each PWA
+- ✅ Included missing `next.config.js` files
+- ✅ Added `dumb-init` for proper process management
+- ✅ Fixed environment variable handling
 
-- Ubuntu 20.04+ or Debian 11+ VPS
-- Root access to the server
-- Domain name configured with DNS pointing to your server IP
-- At least 4GB RAM and 2 CPU cores recommended
-- 50GB+ storage space
+### 2. Environment Configuration Fixed:
+- ✅ Created `.env.production` with correct MongoDB/Redis URLs
+- ✅ Updated backend to handle both `MONGODB_URL` and `MONGODB_URI`
+- ✅ Added environment setup script for production
 
-## Quick Start
+### 3. Quick Fix on Server:
 
-### 1. Initial Server Setup
-
-```bash
-# Connect to your VPS
-ssh root@your-server-ip
-
-# Clone the repository
-git clone https://github.com/yourusername/grs-delivery.git /opt/grs-delivery
-cd /opt/grs-delivery
-
-# Make scripts executable
-chmod +x scripts/*.sh
-
-# Run server setup (installs Docker, Nginx, etc.)
-./scripts/setup-server.sh
-```
-
-### 2. Configure Environment
+To resolve the current container restart issues, run these commands on the server:
 
 ```bash
-# Copy and edit environment file
-cp .env.production .env
-nano .env
+# Navigate to the project directory
+cd /root/delivery-system
 
-# Update the following variables:
-# - MONGO_ROOT_PASSWORD (use a strong password)
-# - REDIS_PASSWORD (use a strong password)
-# - JWT_SECRET (minimum 32 characters)
-# - SMTP_* (for email notifications)
+# Stop all containers
+docker-compose down
+
+# Pull the latest changes (if using git)
+git pull origin main
+
+# Run the fix script
+./scripts/fix-containers.sh
+
+# If that doesn't work, run the debug script to see detailed logs
+./scripts/debug-containers.sh
 ```
 
-### 3. Setup SSL Certificates
+### 4. Manual Fix Steps:
+
+If the automated script doesn't work, follow these manual steps:
 
 ```bash
-# Install SSL certificates for all domains
-certbot certonly --standalone -d grsdeliver.com
-certbot certonly --standalone -d admin.grsdeliver.com
-certbot certonly --standalone -d business.grsdeliver.com
-certbot certonly --standalone -d driver.grsdeliver.com
-certbot certonly --standalone -d api.grsdeliver.com
+# 1. Create proper environment file
+cat > .env << 'EOF'
+NODE_ENV=production
+PORT=3000
+MONGODB_URI=mongodb://admin:password123@mongodb:27017/grs_delivery?authSource=admin
+MONGODB_URL=mongodb://admin:password123@mongodb:27017/grs_delivery?authSource=admin
+REDIS_URL=redis://:redis123@redis:6379
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+COOKIE_SECRET=your-super-secret-cookie-key-change-in-production
+CORS_ORIGIN=https://grsdeliver.com,https://admin.grsdeliver.com,https://business.grsdeliver.com,https://driver.grsdeliver.com
+NEXT_PUBLIC_API_URL=https://api.grsdeliver.com
+NEXT_PUBLIC_WS_URL=wss://api.grsdeliver.com
+EOF
 
-# Copy certificates to nginx directory
-mkdir -p nginx/ssl
-cp /etc/letsencrypt/live/grsdeliver.com/fullchain.pem nginx/ssl/grsdeliver.com.crt
-cp /etc/letsencrypt/live/grsdeliver.com/privkey.pem nginx/ssl/grsdeliver.com.key
-cp /etc/letsencrypt/live/admin.grsdeliver.com/fullchain.pem nginx/ssl/admin.grsdeliver.com.crt
-cp /etc/letsencrypt/live/admin.grsdeliver.com/privkey.pem nginx/ssl/admin.grsdeliver.com.key
-cp /etc/letsencrypt/live/business.grsdeliver.com/fullchain.pem nginx/ssl/business.grsdeliver.com.crt
-cp /etc/letsencrypt/live/business.grsdeliver.com/privkey.pem nginx/ssl/business.grsdeliver.com.key
-cp /etc/letsencrypt/live/driver.grsdeliver.com/fullchain.pem nginx/ssl/driver.grsdeliver.com.crt
-cp /etc/letsencrypt/live/driver.grsdeliver.com/privkey.pem nginx/ssl/driver.grsdeliver.com.key
-cp /etc/letsencrypt/live/api.grsdeliver.com/fullchain.pem nginx/ssl/api.grsdeliver.com.crt
-cp /etc/letsencrypt/live/api.grsdeliver.com/privkey.pem nginx/ssl/api.grsdeliver.com.key
+# 2. Rebuild the containers with no cache
+docker-compose build --no-cache
+
+# 3. Start databases first
+docker-compose up -d mongodb redis
+
+# 4. Wait for databases to be ready
+sleep 30
+
+# 5. Start backend
+docker-compose up -d backend
+
+# 6. Wait for backend to be ready
+sleep 20
+
+# 7. Start PWAs
+docker-compose up -d public-pwa admin-pwa business-pwa driver-pwa
+
+# 8. Start nginx
+docker-compose up -d nginx
+
+# 9. Check status
+docker-compose ps
 ```
 
-### 4. Deploy Application
+### 5. Common Issues and Solutions:
 
+#### Issue: "MONGODB_URI environment variable not set"
+**Solution:** Ensure the `.env` file contains both `MONGODB_URL` and `MONGODB_URI`
+
+#### Issue: "Cannot connect to MongoDB"
+**Solution:** Check if MongoDB container is running and accessible:
 ```bash
-# Run deployment script
-./scripts/deploy.sh production
+docker-compose exec mongodb mongosh --eval "db.adminCommand('ping')"
 ```
 
-### 5. Verify Deployment
-
+#### Issue: "Port already in use"
+**Solution:** Stop conflicting services:
 ```bash
-# Check system status
-grs-status
+# Check what's using the ports
+netstat -tlnp | grep -E ':(80|443|3000|3001|3002|3003|3004)'
 
-# Check application logs
-docker-compose logs -f
-
-# Test endpoints
-curl https://grsdeliver.com
-curl https://admin.grsdeliver.com
-curl https://business.grsdeliver.com
-curl https://driver.grsdeliver.com
-curl https://api.grsdeliver.com/health
+# Kill conflicting processes if needed
+sudo fuser -k 80/tcp 443/tcp 3000/tcp
 ```
 
-## DNS Configuration
-
-Configure your DNS records to point to your server IP:
-
-```
-A     grsdeliver.com           -> YOUR_SERVER_IP
-A     admin.grsdeliver.com     -> YOUR_SERVER_IP
-A     business.grsdeliver.com  -> YOUR_SERVER_IP
-A     driver.grsdeliver.com    -> YOUR_SERVER_IP
-A     api.grsdeliver.com       -> YOUR_SERVER_IP
-```
-
-## Updating the Application
-
-When you make changes to your code and want to deploy updates:
-
+#### Issue: "Container keeps restarting"
+**Solution:** Check container logs:
 ```bash
-# Navigate to application directory
-cd /opt/grs-delivery
-
-# Run update script
-./scripts/update.sh
-
-# Choose update method:
-# 1) Rolling update (zero downtime)
-# 2) Quick update (brief downtime)
-```
-
-## Monitoring and Maintenance
-
-### System Status
-```bash
-# Check overall system status
-grs-status
-
-# Check Docker containers
-docker ps
-
-# Check logs
 docker-compose logs -f [service-name]
 ```
 
-### Backup and Restore
+### 6. Health Check Commands:
+
+After deployment, verify everything is working:
+
 ```bash
-# Backups are automatically created during deployment
-# Manual backup
-docker run --rm \
-  -v grs-delivery_mongodb_data:/data/mongodb \
-  -v grs-delivery_redis_data:/data/redis \
-  -v /opt/backups/grs-delivery:/backup \
-  alpine:latest \
-  tar czf /backup/manual_backup_$(date +%Y%m%d_%H%M%S).tar.gz /data
+# Check all containers are running
+docker-compose ps
 
-# Restore from backup
-docker-compose down
-docker run --rm \
-  -v grs-delivery_mongodb_data:/data/mongodb \
-  -v grs-delivery_redis_data:/data/redis \
-  -v /opt/backups/grs-delivery:/backup \
-  alpine:latest \
-  tar xzf /backup/backup_TIMESTAMP.tar.gz -C /
-docker-compose up -d
+# Check MongoDB connectivity
+docker-compose exec mongodb mongosh --eval "db.adminCommand('ping')"
+
+# Check Redis connectivity
+docker-compose exec redis redis-cli ping
+
+# Check backend API
+curl -f http://localhost:3000/health || echo "Backend not responding"
+
+# Check PWA applications
+for port in 3001 3002 3003 3004; do
+  curl -f http://localhost:$port || echo "Port $port not responding"
+done
+
+# Check nginx
+curl -f http://localhost || echo "Nginx not responding"
 ```
 
-### SSL Certificate Renewal
+### 7. Monitoring:
+
+Use the provided monitoring script:
 ```bash
-# Certificates auto-renew, but you can manually renew:
-certbot renew
-
-# Update nginx certificates after renewal
-./scripts/update-ssl.sh
+./scripts/monitor.sh
 ```
 
-## Troubleshooting
+### 8. SSL Certificates:
 
-### Common Issues
+If SSL certificates are missing, you'll need to:
+1. Install certbot
+2. Generate certificates for your domains
+3. Update nginx configuration
+4. Restart nginx
 
-1. **Containers not starting**
-   ```bash
-   # Check logs
-   docker-compose logs [service-name]
-   
-   # Restart specific service
-   docker-compose restart [service-name]
-   ```
+The specific SSL setup would depend on your domain configuration and DNS settings.
 
-2. **SSL certificate issues**
-   ```bash
-   # Check certificate validity
-   openssl x509 -in nginx/ssl/grsdeliver.com.crt -text -noout
-   
-   # Renew certificates
-   certbot renew --force-renewal
-   ```
+---
 
-3. **Database connection issues**
-   ```bash
-   # Check MongoDB logs
-   docker-compose logs mongodb
-   
-   # Connect to MongoDB
-   docker exec -it grs-mongodb mongo -u admin -p
-   ```
+## Summary
 
-4. **High memory usage**
-   ```bash
-   # Check memory usage
-   free -h
-   
-   # Restart services to free memory
-   docker-compose restart
-   ```
+The main issues causing container restarts were:
+1. **Docker CMD format** - Fixed working directories and command structure
+2. **Environment variables** - Mismatched variable names between Docker Compose and backend
+3. **Missing files** - Added next.config.js and environment setup
+4. **Process management** - Added dumb-init for proper signal handling
 
-### Performance Optimization
-
-1. **Enable Redis caching**
-   - Ensure Redis is properly configured in your backend
-   - Monitor Redis memory usage
-
-2. **Optimize Docker images**
-   ```bash
-   # Remove unused images
-   docker image prune -f
-   
-   # Remove unused volumes (be careful!)
-   docker volume prune -f
-   ```
-
-3. **Monitor resource usage**
-   ```bash
-   # Install monitoring tools
-   apt install htop iotop nethogs
-   
-   # Monitor in real-time
-   htop
-   ```
-
-## Security Considerations
-
-1. **Firewall Configuration**
-   - Only ports 22 (SSH), 80 (HTTP), and 443 (HTTPS) should be open
-   - Use fail2ban for SSH protection
-
-2. **Regular Updates**
-   - System packages are automatically updated
-   - Monitor security advisories for Docker and Node.js
-
-3. **Database Security**
-   - Use strong passwords for MongoDB and Redis
-   - Regularly backup your data
-   - Consider encrypting backups
-
-4. **SSL/TLS**
-   - Use strong SSL configurations
-   - Regularly update certificates
-   - Monitor certificate expiration
-
-## Support
-
-For issues and questions:
-1. Check the logs: `docker-compose logs -f`
-2. Review this documentation
-3. Check the GitHub issues page
-4. Contact the development team
-
-## Architecture Overview
-
-```
-Internet
-    ↓
-Nginx (Port 80/443)
-    ↓
-┌─────────────────────────────────────────┐
-│  Docker Network (grs-network)          │
-│                                         │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
-│  │Public   │  │Admin    │  │Business │ │
-│  │PWA      │  │PWA      │  │PWA      │ │
-│  │:3001    │  │:3002    │  │:3003    │ │
-│  └─────────┘  └─────────┘  └─────────┘ │
-│                                         │
-│  ┌─────────┐  ┌─────────┐              │
-│  │Driver   │  │Backend  │              │
-│  │PWA      │  │API      │              │
-│  │:3004    │  │:3000    │              │
-│  └─────────┘  └─────────┘              │
-│                    ↓                    │
-│  ┌─────────┐  ┌─────────┐              │
-│  │MongoDB  │  │Redis    │              │
-│  │:27017   │  │:6379    │              │
-│  └─────────┘  └─────────┘              │
-└─────────────────────────────────────────┘
-```
+All these issues have been fixed in the updated Dockerfile and configuration files.

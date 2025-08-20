@@ -74,7 +74,8 @@
       "Bash(timeout 60s pnpm run build)",
       "Bash(for:*)",
       "Bash(do sed -i '' 's/request\\.user/request.currentUser/g' \"$file\")",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(ssh:*)"
     ],
     "deny": []
   }
