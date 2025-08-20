@@ -56,7 +56,6 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - mongodb
       - redis
     networks:
       - grs-network
