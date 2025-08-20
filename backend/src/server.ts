@@ -78,7 +78,7 @@ class DeliveryServer {
 
     // CORS configuration
     await this.server.register(cors, {
-      origin: config.CORS_ORIGINS,
+      origin: true,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
