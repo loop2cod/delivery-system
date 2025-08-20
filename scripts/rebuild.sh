@@ -84,73 +84,77 @@ else
     echo -e "${YELLOW}Step 2: Skipping clean (use --clean to clean Docker cache)${NC}"
 fi
 
-# Step 3: Build dependencies
-echo -e "${YELLOW}Step 3: Installing dependencies...${NC}"
+# Step 3: Check dependencies (Docker will handle them)
+echo -e "${YELLOW}Step 3: Checking dependencies...${NC}"
 
-# Check and install pnpm if needed
-install_pnpm() {
-    if ! command -v pnpm &> /dev/null; then
-        echo "  Installing pnpm..."
-        if command -v npm &> /dev/null; then
+# Check if we have Node.js package managers available
+if command -v npm &> /dev/null || command -v pnpm &> /dev/null || command -v yarn &> /dev/null; then
+    echo "  Package managers available - installing dependencies..."
+    
+    # Install pnpm if needed and available
+    if [[ -f "pnpm-lock.yaml" ]]; then
+        if ! command -v pnpm &> /dev/null && command -v npm &> /dev/null; then
+            echo "  Installing pnpm..."
             npm install -g pnpm
-        else
-            echo "  ERROR: npm not found. Cannot install pnpm."
-            return 1
+        fi
+        
+        if command -v pnpm &> /dev/null; then
+            echo "  Installing pnpm dependencies..."
+            pnpm install
+        elif command -v npm &> /dev/null; then
+            echo "  Using npm instead of pnpm..."
+            npm install
+        fi
+    elif [[ -f "package-lock.json" ]] && command -v npm &> /dev/null; then
+        echo "  Installing npm dependencies..."
+        npm install
+    elif [[ -f "yarn.lock" ]]; then
+        if ! command -v yarn &> /dev/null && command -v npm &> /dev/null; then
+            echo "  Installing yarn..."
+            npm install -g yarn
+        fi
+        if command -v yarn &> /dev/null; then
+            echo "  Installing yarn dependencies..."
+            yarn install
         fi
     fi
-}
-
-if [[ -f "pnpm-lock.yaml" ]]; then
-    install_pnpm
-    if command -v pnpm &> /dev/null; then
-        echo "  Installing pnpm dependencies..."
-        pnpm install
-    else
-        echo "  Falling back to npm..."
-        npm install
-    fi
-elif [[ -f "package-lock.json" ]]; then
-    echo "  Installing npm dependencies..."
-    npm install
-elif [[ -f "yarn.lock" ]]; then
-    if ! command -v yarn &> /dev/null; then
-        echo "  Installing yarn..."
-        npm install -g yarn
-    fi
-    echo "  Installing yarn dependencies..."
-    yarn install
 else
-    echo "  No lock file found, skipping dependency installation"
+    echo "  No package managers found - Docker will handle dependencies during build"
 fi
 
-# Step 4: Build TypeScript/assets
+# Step 4: Build application assets
 echo -e "${YELLOW}Step 4: Building application assets...${NC}"
 
-# Determine which package manager to use for build
-get_package_manager() {
-    if [[ -f "pnpm-lock.yaml" ]] && command -v pnpm &> /dev/null; then
-        echo "pnpm"
-    elif [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
-        echo "yarn"
-    elif command -v npm &> /dev/null; then
-        echo "npm"
-    else
-        echo ""
-    fi
-}
+# Check if we can build locally or if Docker will handle it
+if command -v npm &> /dev/null || command -v pnpm &> /dev/null || command -v yarn &> /dev/null; then
+    # Determine which package manager to use for build
+    get_package_manager() {
+        if [[ -f "pnpm-lock.yaml" ]] && command -v pnpm &> /dev/null; then
+            echo "pnpm"
+        elif [[ -f "yarn.lock" ]] && command -v yarn &> /dev/null; then
+            echo "yarn"
+        elif command -v npm &> /dev/null; then
+            echo "npm"
+        else
+            echo ""
+        fi
+    }
 
-PM=$(get_package_manager)
+    PM=$(get_package_manager)
 
-if [[ -n "$PM" ]]; then
-    if [[ "$MODE" == "dev" ]]; then
-        echo "  Running development build with $PM..."
-        $PM run build 2>/dev/null || echo "  No build script found"
+    if [[ -n "$PM" ]]; then
+        if [[ "$MODE" == "dev" ]]; then
+            echo "  Running development build with $PM..."
+            $PM run build 2>/dev/null || echo "  No build script found"
+        else
+            echo "  Running production build with $PM..."
+            NODE_ENV=production $PM run build 2>/dev/null || echo "  No build script found"
+        fi
     else
-        echo "  Running production build with $PM..."
-        NODE_ENV=production $PM run build 2>/dev/null || echo "  No build script found"
+        echo "  No package manager available for local build"
     fi
 else
-    echo "  No package manager available, skipping build"
+    echo "  No package managers found - Docker will handle builds during container build"
 fi
 
 # Step 5: Build Docker images
