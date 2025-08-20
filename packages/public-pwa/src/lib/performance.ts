@@ -2,7 +2,14 @@
  * Performance tracking initialization for Public PWA
  */
 
-import { createPWAMetrics, type PWAMetricsConfig } from '@/shared/performance/pwa-metrics';
+// Temporary stub implementation until shared metrics are implemented
+interface PWAMetricsConfig {
+  appName: string;
+  version: string;
+  endpoint: string;
+  enableAutoTracking: boolean;
+  enableOptimizations: boolean;
+}
 
 const config: PWAMetricsConfig = {
   appName: 'public-pwa',
@@ -12,8 +19,14 @@ const config: PWAMetricsConfig = {
   enableOptimizations: true
 };
 
-// Initialize metrics for Public PWA
-export const publicMetrics = createPWAMetrics(config);
+// Initialize metrics for Public PWA - stub implementation
+export const publicMetrics = {
+  trackFormSubmission: (name: string, success: boolean) => console.log('Form submission tracked:', name, success),
+  trackDeliveryMetric: (name: string, value: number, meta?: any) => console.log('Delivery metric tracked:', name, value, meta),
+  trackFeatureUsage: (feature: string, used: boolean) => console.log('Feature usage tracked:', feature, used),
+  trackInteraction: (type: string, method: string) => console.log('Interaction tracked:', type, method),
+  trackPageView: (page: string, meta?: any) => console.log('Page view tracked:', page, meta)
+};
 
 // Public PWA specific tracking functions
 export const trackEnquirySubmission = (success: boolean, formType: string) => {

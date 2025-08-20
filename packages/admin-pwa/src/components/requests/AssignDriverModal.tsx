@@ -91,7 +91,7 @@ export function AssignDriverModal({
   };
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} size="xl">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">
@@ -276,7 +276,6 @@ export function AssignDriverModal({
             <Button
               onClick={handleAssign}
               disabled={!selectedDriverId || isAssigning || availableDrivers.length === 0}
-              loading={isAssigning}
             >
               Assign Driver
             </Button>

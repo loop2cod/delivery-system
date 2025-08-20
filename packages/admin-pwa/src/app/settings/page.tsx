@@ -127,7 +127,7 @@ export default function SettingsPage() {
 
   const handleSaveStaff = async (staffData: any) => {
     try {
-      let result;
+      let result: any;
       
       if (editingStaff) {
         // Update existing staff member
@@ -585,7 +585,7 @@ export default function SettingsPage() {
             setEditingStaff(null);
           }}
           onSave={handleSaveStaff}
-          staff={editingStaff}
+          staff={editingStaff as any}
           isEdit={!!editingStaff}
         />
       </div>

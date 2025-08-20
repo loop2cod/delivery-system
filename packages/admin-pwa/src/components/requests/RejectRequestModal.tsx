@@ -80,7 +80,7 @@ export function RejectRequestModal({
   };
 
   return (
-    <Dialog open={isOpen} onClose={handleClose} size="lg">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
         <div className="flex items-center">
           <div className="flex-shrink-0">
@@ -228,7 +228,6 @@ export function RejectRequestModal({
           onClick={handleReject}
           disabled={!isFormValid() || isRejecting}
           className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white order-1 sm:order-2"
-          loading={isRejecting}
         >
           {isRejecting ? 'Rejecting Request...' : 'Reject Request'}
         </Button>

@@ -207,12 +207,12 @@ export function Header({ setSidebarOpen }: HeaderProps) {
               <span className="sr-only">Open user menu</span>
               <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
                 <span className="text-sm font-semibold text-white">
-                  {user?.firstName?.[0] || 'A'}
+                  {user?.name?.[0] || 'A'}
                 </span>
               </div>
               <span className="hidden lg:flex lg:items-center">
                 <span className="ml-4 text-sm font-semibold leading-6 text-gray-900" aria-hidden="true">
-                  {user?.firstName} {user?.lastName}
+                  {user?.name}
                 </span>
                 <ChevronDownIcon className="ml-2 h-5 w-5 text-gray-400" aria-hidden="true" />
               </span>

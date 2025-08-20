@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import QRCodeGenerator from '@delivery-uae/shared/components/QRCodeGenerator';
-import QRCodeScanner from '@delivery-uae/shared/components/QRCodeScanner';
-import { QRCodeData } from '@delivery-uae/shared/qr-utils';
+
+// Temporary types until shared components are implemented
+interface QRCodeData {
+  type: 'package' | 'delivery' | 'inquiry' | 'tracking';
+  id: string;
+  metadata?: Record<string, any>;
+}
 
 interface QRItem {
   id: string;
@@ -262,15 +266,12 @@ export default function QRManagementPage() {
               {generateForm.id && (
                 <div className="mt-6 pt-6 border-t border-gray-200">
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Preview</h3>
-                  <QRCodeGenerator
-                    type={generateForm.type}
-                    id={generateForm.id}
-                    metadata={generateForm.metadata}
-                    size={200}
-                    showLabel={true}
-                    showDownload={false}
-                    className="max-w-sm"
-                  />
+                  <div className="bg-gray-100 p-4 rounded-lg text-center text-gray-500">
+                    <div className="text-4xl mb-2">🔳</div>
+                    <p>QR Preview</p>
+                    <p className="text-sm">{generateForm.type}: {generateForm.id}</p>
+                    <p className="text-xs mt-2 text-gray-400">QR components will be implemented</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -440,15 +441,24 @@ export default function QRManagementPage() {
         )}
       </div>
 
-      {/* QR Scanner Modal */}
-      <QRCodeScanner
-        isOpen={scannerOpen}
-        onScan={handleScan}
-        onError={handleScanError}
-        onClose={() => setScannerOpen(false)}
-        allowMultipleScan={true}
-        scanDelay={1000}
-      />
+      {/* QR Scanner Modal - Placeholder */}
+      {scannerOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📱</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">QR Scanner</h3>
+              <p className="text-gray-500 mb-4">QR Scanner component will be implemented</p>
+              <button
+                onClick={() => setScannerOpen(false)}
+                className="bg-[#C32C3C] text-white py-2 px-4 rounded-md hover:bg-[#a82633]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

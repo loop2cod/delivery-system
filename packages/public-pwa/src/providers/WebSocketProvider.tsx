@@ -1,7 +1,45 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { WebSocketClient } from '@delivery-uae/shared';
+// Temporary stub until shared WebSocketClient is implemented
+class WebSocketClient {
+  constructor(config: any) {
+    console.log('WebSocketClient stub initialized with config:', config);
+  }
+  
+  on(event: string, handler: (...args: any[]) => void) {
+    console.log('WebSocket event handler registered:', event);
+  }
+  
+  connect() {
+    console.log('WebSocket connect stub called');
+    return Promise.resolve();
+  }
+  
+  disconnect() {
+    console.log('WebSocket disconnect stub called');
+  }
+  
+  subscribe(topic: string, callback: (data: any) => void) {
+    console.log('WebSocket subscribe stub called:', topic);
+  }
+  
+  unsubscribe(topic: string) {
+    console.log('WebSocket unsubscribe stub called:', topic);
+  }
+  
+  send(message: any) {
+    console.log('WebSocket send stub called:', message);
+  }
+  
+  subscribeToChannel(channel: string) {
+    console.log('WebSocket subscribeToChannel stub called:', channel);
+  }
+  
+  unsubscribeFromChannel(channel: string) {
+    console.log('WebSocket unsubscribeFromChannel stub called:', channel);
+  }
+}
 
 interface WebSocketContextType {
   client: WebSocketClient | null;

@@ -170,7 +170,7 @@ export function DriverModal({
                         </>
                       ) : (
                         <>
-                          <Select value={editableStatus} onValueChange={setEditableStatus}>
+                          <Select value={editableStatus} onValueChange={(value) => setEditableStatus(value as any)}>
                             <SelectTrigger className="w-32">
                               <SelectValue />
                             </SelectTrigger>
@@ -181,7 +181,7 @@ export function DriverModal({
                               <SelectItem value="ON_LEAVE">On Leave</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Select value={editableAvailability} onValueChange={setEditableAvailability}>
+                          <Select value={editableAvailability} onValueChange={(value) => setEditableAvailability(value as any)}>
                             <SelectTrigger className="w-32">
                               <SelectValue />
                             </SelectTrigger>

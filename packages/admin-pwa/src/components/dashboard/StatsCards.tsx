@@ -14,7 +14,7 @@ interface StatsCard {
   value: string;
   change: string;
   changeType: 'increase' | 'decrease' | 'neutral';
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  icon: any;
   color: string;
 }
 
