@@ -38,9 +38,13 @@ RUN pnpm install --prod --frozen-lockfile
 FROM node:18-alpine AS backend
 RUN apk add --no-cache dumb-init bash
 WORKDIR /app
+# Copy backend build output and package manifest
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/backend/package.json ./backend/
+# Copy pnpm root node_modules (contains .pnpm store) and backend's node_modules
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
+# Env and setup
 COPY --from=builder /app/.env.production ./.env.production
 COPY --from=builder /app/scripts/setup-production-env.sh ./scripts/setup-production-env.sh
 RUN chmod +x ./scripts/setup-production-env.sh
