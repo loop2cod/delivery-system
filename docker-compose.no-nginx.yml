@@ -1,0 +1,125 @@
+version: '3.8'
+
+services:
+  # Redis Cache (MongoDB Atlas used for database)
+  redis:
+    image: redis:7.2-alpine
+    container_name: grs-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis123}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - grs-network
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      target: backend
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
+    container_name: grs-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MONGODB_URL: mongodb+srv://grs:grs2Deliver@grs.e9af7mt.mongodb.net/delivery_uae_production
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis123}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-jwt-secret-change-in-production}
+      COOKIE_SECRET: ${COOKIE_SECRET:-your-cookie-secret-change-in-production}
+      CORS_ORIGINS: http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004
+    ports:
+      - "3000:3000"
+    depends_on:
+      - redis
+    networks:
+      - grs-network
+
+  # Public PWA
+  public-pwa:
+    build:
+      context: .
+      target: public-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
+    container_name: grs-public-pwa
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    networks:
+      - grs-network
+
+  # Admin PWA
+  admin-pwa:
+    build:
+      context: .
+      target: admin-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
+    container_name: grs-admin-pwa
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+    networks:
+      - grs-network
+
+  # Business PWA
+  business-pwa:
+    build:
+      context: .
+      target: business-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
+    container_name: grs-business-pwa
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+    ports:
+      - "3003:3003"
+    depends_on:
+      - backend
+    networks:
+      - grs-network
+
+  # Driver PWA
+  driver-pwa:
+    build:
+      context: .
+      target: driver-pwa
+      args:
+        PNPM_FLAGS: --no-frozen-lockfile
+    container_name: grs-driver-pwa
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      NEXT_PUBLIC_WS_URL: ws://localhost:3000
+    ports:
+      - "3004:3004"
+    depends_on:
+      - backend
+    networks:
+      - grs-network
+
+volumes:
+  redis_data:
+
+networks:
+  grs-network:
+    driver: bridge
