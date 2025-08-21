@@ -18,6 +18,21 @@
 ```
 This builds everything and starts all services.
 
+### If Docker is not running locally
+If you get "Cannot connect to Docker daemon" on your local machine, you can:
+
+1. **Build code only (skip Docker):**
+   ```bash
+   ./deploy.sh --skip-docker
+   ```
+
+2. **Then on your KVM VPS, build Docker images:**
+   ```bash
+   # After copying files to server
+   docker-compose build --no-cache
+   docker-compose up -d
+   ```
+
 ### Individual App Builds
 If you want to build apps separately:
 

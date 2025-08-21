@@ -80,9 +80,41 @@ else
     echo -e "${YELLOW}⏭️ Step 3: Skipping PWA builds${NC}"
 fi
 
-# Step 4: Docker operations
+# Step 4: Create production environment
+echo -e "${YELLOW}📝 Step 4: Creating production environment...${NC}"
+cat > .env.production << 'EOF'
+NODE_ENV=production
+ENVIRONMENT=production
+
+# Database Configuration
+MONGODB_URL=${MONGODB_URL:-mongodb://mongodb:27017/delivery_uae_production}
+MONGO_DB_NAME=${MONGO_DB_NAME:-delivery_uae_production}
+
+# Redis Configuration  
+REDIS_URL=${REDIS_URL:-redis://redis:6379}
+REDIS_HOST=redis
+REDIS_PORT=6379
+
+# Security Configuration
+JWT_SECRET=${JWT_SECRET:-your-jwt-secret-change-in-production}
+COOKIE_SECRET=${COOKIE_SECRET:-your-cookie-secret-change-in-production}
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=3000
+PORT=3000
+
+# CORS Configuration
+CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004}
+
+# Frontend URLs
+NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:3000}
+EOF
+
+# Step 5: Docker operations
 if [ "$DOCKER_BUILD" = true ]; then
-    echo -e "${YELLOW}🐳 Step 4: Building Docker containers...${NC}"
+    echo -e "${YELLOW}🐳 Step 5: Building Docker containers...${NC}"
     
     # Stop existing containers
     echo "  Stopping existing containers..."
@@ -94,12 +126,12 @@ if [ "$DOCKER_BUILD" = true ]; then
     
     echo -e "${GREEN}✅ Docker images built successfully!${NC}"
 else
-    echo -e "${YELLOW}⏭️ Step 4: Skipping Docker build${NC}"
+    echo -e "${YELLOW}⏭️ Step 5: Skipping Docker build${NC}"
 fi
 
-# Step 5: Start services
+# Step 6: Start services
 if [ "$START_SERVICES" = true ]; then
-    echo -e "${YELLOW}🚀 Step 5: Starting services...${NC}"
+    echo -e "${YELLOW}🚀 Step 6: Starting services...${NC}"
     
     # Start databases first
     echo "  Starting databases..."
@@ -127,12 +159,12 @@ if [ "$START_SERVICES" = true ]; then
     
     echo -e "${GREEN}✅ All services started!${NC}"
 else
-    echo -e "${YELLOW}⏭️ Step 5: Skipping service startup${NC}"
+    echo -e "${YELLOW}⏭️ Step 6: Skipping service startup${NC}"
 fi
 
-# Step 6: Health check
+# Step 7: Health check
 if [ "$START_SERVICES" = true ]; then
-    echo -e "${YELLOW}🔍 Step 6: Health check...${NC}"
+    echo -e "${YELLOW}🔍 Step 7: Health check...${NC}"
     
     # Check container status
     echo "  Container status:"

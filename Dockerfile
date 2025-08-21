@@ -44,13 +44,11 @@ COPY --from=builder /app/backend/package.json ./backend/
 # Copy pnpm root node_modules (contains .pnpm store) and backend's node_modules
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
-# Env and setup
-COPY --from=builder /app/.env.production ./.env.production
-COPY --from=builder /app/scripts/setup-production-env.sh ./scripts/setup-production-env.sh
-RUN chmod +x ./scripts/setup-production-env.sh
+# Set production environment
+ENV NODE_ENV=production
 EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "./scripts/setup-production-env.sh && node backend/dist/server.js"]
+CMD ["node", "backend/dist/server.js"]
 
 # Public PWA production stage
 FROM node:18-alpine AS public-pwa
