@@ -78,7 +78,9 @@
       "Bash(ssh:*)",
       "Bash(docker compose:*)",
       "Bash(docker:*)",
-      "Bash(./deploy.sh)"
+      "Bash(./deploy.sh)",
+      "Bash(./final-fix.sh)",
+      "Bash(open:*)"
     ],
     "deny": []
   }
