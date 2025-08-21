@@ -105,6 +105,10 @@ REDIS_PASSWORD=redis123
 JWT_SECRET=your-jwt-secret-change-in-production-kbh979bhb87bj4vhg8
 COOKIE_SECRET=your-cookie-secret-change-in-production-kbh979bhbnkj8879kjvhg8
 
+# VAPID Keys for Push Notifications
+VAPID_PUBLIC_KEY=BADdgsc8VG_REsV-xioz8NR_RT2F1o7aSzidDvAD6Ok89kQQAItcHBPLWOMVNmrdcm4CzNwB9g070l1W82BZn-4
+VAPID_PRIVATE_KEY=g4q93Hx9Pzp1npudzGyih4HdQond28ESGCR-bzuoVj0
+
 # API Configuration
 API_HOST=0.0.0.0
 API_PORT=3000
