@@ -144,20 +144,6 @@ export default function LoginPage() {
               )}
             </button>
           </div>
-
-          <div className="text-center space-y-2">
-            <p className="text-xs text-gray-500">
-              Demo credentials: dranju@blitebreal.in / p0qu3364sjtjjzml
-            </p>
-            <div className="border-t border-gray-200 pt-4">
-              <p className="text-sm text-gray-600">
-                Don't have a business account?{' '}
-                <a href="#" className="font-medium text-primary hover:text-primary/80">
-                  Contact sales
-                </a>
-              </p>
-            </div>
-          </div>
         </form>
       </div>
     </div>

@@ -37,7 +37,7 @@ export function SolutionHero() {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-12">
               <Link 
-                href="/enquiry"
+                href="/inquiry"
                 className="bg-uae-red hover:bg-red-700 text-white px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
               >
                 Request Free Demo <ArrowRight className="w-5 h-5" />

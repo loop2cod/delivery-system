@@ -595,14 +595,14 @@ export default function InquiryPage() {
                   <Phone className="w-5 h-5 text-blue-600" />
                   <div>
                     <p className="text-sm text-slate-600">Call us</p>
-                    <p className="font-semibold text-slate-800">+971 4 123 4567</p>
+                    <p className="font-semibold text-slate-800">+971545821123</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-center gap-3 p-3 bg-green-50 rounded-lg">
                   <Mail className="w-5 h-5 text-green-600" />
                   <div>
                     <p className="text-sm text-slate-600">Email us</p>
-                    <p className="font-semibold text-slate-800">business@deliveryuae.com</p>
+                    <p className="font-semibold text-slate-800">support@grsdeliver.com</p>
                   </div>
                 </div>
               </div>
