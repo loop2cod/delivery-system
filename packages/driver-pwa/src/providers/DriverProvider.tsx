@@ -78,7 +78,7 @@ interface DriverContextType {
 
 const DriverContext = createContext<DriverContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 // Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL;

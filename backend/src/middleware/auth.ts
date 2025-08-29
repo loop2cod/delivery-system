@@ -28,7 +28,8 @@ const publicRoutes = [
   '/api/auth/login',
   '/api/auth/register',
   '/api/auth/refresh',
-  '/api/webhooks'
+  '/api/webhooks',
+  '/api/driver/location'  // Allow drivers to update location without auth (for initial location sharing)
 ];
 
 // Role-based route access control

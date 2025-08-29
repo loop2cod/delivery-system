@@ -2341,7 +2341,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
         return reply.code(404).send({ error: 'Driver not found' });
       }
       
-      updateData.assignedDriverId = driverId;
+      updateData.assigned_driver_id = new ObjectId(driverId);
       updateData.assignedAt = new Date();
     }
 
@@ -2422,7 +2422,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     // Update request
     const updateData = {
       status: 'ASSIGNED',
-      assignedDriverId: driverId,
+      assigned_driver_id: new ObjectId(driverId), // Use correct field name that driver endpoint expects
       assignedAt: new Date(),
       adminNotes: notes || '',
       updatedAt: new Date()

@@ -221,6 +221,46 @@ export class AuthService {
       email_verified: true
     });
 
+    // Create driver profile if user is a driver
+    if (role === UserRole.DRIVER) {
+      try {
+        const { db } = require('../config/database');
+        const { ObjectId } = require('mongodb');
+        
+        await db.insertOne('drivers', {
+          _id: new ObjectId(),
+          user_id: new ObjectId(newUser._id.toString()),
+          name: newUser.name,
+          email: newUser.email,
+          phone: newUser.phone,
+          license_number: null, // Will be filled later by admin or driver
+          vehicle_type: 'motorcycle', // Default
+          vehicle_plate: null, // Will be filled later
+          status: 'AVAILABLE',
+          rating: 5.0,
+          total_deliveries: 0,
+          completed_deliveries: 0,
+          availability_status: 'AVAILABLE',
+          documents_verified: false,
+          joined_date: new Date(),
+          last_active: new Date(),
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+        
+        logger.info('Driver profile created', {
+          userId: newUser._id.toString(),
+          email: newUser.email
+        });
+      } catch (error) {
+        logger.error('Failed to create driver profile', {
+          userId: newUser._id.toString(),
+          error: error.message
+        });
+        // Continue without failing the registration
+      }
+    }
+
     // Generate tokens
     const { token, refreshToken } = await this.generateTokens(newUser._id.toString());
 

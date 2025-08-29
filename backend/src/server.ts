@@ -1,8 +1,3 @@
-/**
- * UAE Delivery Management System - Backend Server
- * Main server entry point with Fastify framework
- */
-
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';

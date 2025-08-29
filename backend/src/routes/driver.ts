@@ -8,11 +8,22 @@ import { RequestStatus } from '../models/DeliveryRequest';
 import { DriverStatus } from '../models/Driver';
 
 export async function driverRoutes(fastify: FastifyInstance) {
-  // Apply authentication to all driver routes
-  fastify.addHook('preHandler', authenticateToken);
+  // Custom authentication handler for driver routes
+  const driverAuthHandler = async (request: any, reply: any) => {
+    // Skip auth for location endpoint to allow anonymous location updates
+    if (request.url.endsWith('/location') && request.method === 'POST') {
+      return;
+    }
+    
+    // Apply authentication for all other routes
+    await authenticateToken(request, reply);
+    
+    // Apply role check for authenticated routes
+    await requireRoles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN)(request, reply);
+  };
   
-  // Driver routes require DRIVER, ADMIN, or SUPER_ADMIN role
-  fastify.addHook('preHandler', requireRoles(UserRole.DRIVER, UserRole.ADMIN, UserRole.SUPER_ADMIN));
+  // Apply custom authentication to all driver routes
+  fastify.addHook('preHandler', driverAuthHandler);
 
   // Get driver profile
   fastify.get('/profile', asyncHandler(async (request, reply) => {
@@ -198,18 +209,31 @@ export async function driverRoutes(fastify: FastifyInstance) {
 
   // Update driver location
   fastify.post('/location', asyncHandler(async (request, reply) => {
-    const { latitude, longitude, accuracy } = request.body as any;
-    const userId = request.currentUser!.id;
+    const { latitude, longitude, accuracy, driverId, deviceId } = request.body as any;
     
     if (!latitude || !longitude) {
       return reply.code(400).send({ error: 'Latitude and longitude are required' });
     }
 
-    // Find driver by user_id
-    const driver = await db.findOne('drivers', { user_id: new ObjectId(userId) });
+    let driver = null;
+
+    // If user is authenticated, use their user ID
+    if (request.currentUser?.id) {
+      driver = await db.findOne('drivers', { user_id: new ObjectId(request.currentUser.id) });
+    } 
+    // If not authenticated, allow anonymous location updates with driverId or deviceId
+    else if (driverId) {
+      driver = await db.findOne('drivers', { _id: new ObjectId(driverId) });
+    } else if (deviceId) {
+      // Find driver by device ID (you might need to add a device_id field to drivers collection)
+      driver = await db.findOne('drivers', { device_id: deviceId });
+    }
     
     if (!driver) {
-      return reply.code(404).send({ error: 'Driver profile not found' });
+      // For anonymous updates without valid driver identification, just log the location
+      // This allows the driver app to work before login
+      console.log('Anonymous location update:', { latitude, longitude, accuracy, driverId, deviceId });
+      return { message: 'Location logged (anonymous)', anonymous: true };
     }
 
     // Update driver location
@@ -228,7 +252,7 @@ export async function driverRoutes(fastify: FastifyInstance) {
       }
     );
 
-    return { message: 'Location updated successfully' };
+    return { message: 'Location updated successfully', driverId: driver._id.toString() };
   }));
 
   // Update driver status
