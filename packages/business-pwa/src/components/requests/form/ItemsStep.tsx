@@ -1,4 +1,4 @@
-import { UseFormRegister, Control, FieldArrayWithId } from 'react-hook-form';
+import { UseFormRegister, Control, FieldArrayWithId, FieldErrors } from 'react-hook-form';
 import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { calculateTotalWeight, formatPrice, formatWeight } from '@/lib/api';
 import { DeliveryRequestFormData } from '../types';
@@ -6,29 +6,31 @@ import { DeliveryRequestFormData } from '../types';
 interface ItemsStepProps {
   register: UseFormRegister<DeliveryRequestFormData>;
   control: Control<DeliveryRequestFormData>;
+  errors?: FieldErrors<DeliveryRequestFormData>;
   fields: FieldArrayWithId<DeliveryRequestFormData, "items", "id">[];
   watchedValues: DeliveryRequestFormData;
   companyPricing: any;
   loadingPricing: boolean;
-  calculatePriceForWeight: (weight: number) => number;
   estimatedCost: number | null;
   calculatingPrice: boolean;
   onAddItem: () => void;
   onRemoveItem: (index: number) => void;
+  showValidationErrors?: boolean;
 }
 
 export function ItemsStep({
   register,
   control,
+  errors,
   fields,
   watchedValues,
   companyPricing,
   loadingPricing,
-  calculatePriceForWeight,
   estimatedCost,
   calculatingPrice,
   onAddItem,
-  onRemoveItem
+  onRemoveItem,
+  showValidationErrors
 }: ItemsStepProps) {
 
   return (

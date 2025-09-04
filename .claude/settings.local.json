@@ -80,7 +80,8 @@
       "Bash(docker:*)",
       "Bash(./deploy.sh)",
       "Bash(./final-fix.sh)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(pnpm --filter business-pwa exec tsc --noEmit --skipLibCheck)"
     ],
     "deny": []
   }

@@ -1,4 +1,4 @@
-import { UseFormRegister } from 'react-hook-form';
+import { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { MapPinIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
 import { DeliveryRequestFormData } from '../types';
 
@@ -17,18 +17,24 @@ interface Company {
 
 interface PickupDeliveryStepProps {
   register: UseFormRegister<DeliveryRequestFormData>;
+  errors?: FieldErrors<DeliveryRequestFormData>;
   company: Company | null;
   loadingCompany: boolean;
   onAutoFillPickup: () => void;
   onCopyPickupToDelivery: () => void;
+  showValidationErrors?: boolean;
+  watchedValues?: DeliveryRequestFormData;
 }
 
 export function PickupDeliveryStep({
   register,
+  errors,
   company,
   loadingCompany,
   onAutoFillPickup,
-  onCopyPickupToDelivery
+  onCopyPickupToDelivery,
+  showValidationErrors,
+  watchedValues
 }: PickupDeliveryStepProps) {
   return (
     <div className="space-y-8">

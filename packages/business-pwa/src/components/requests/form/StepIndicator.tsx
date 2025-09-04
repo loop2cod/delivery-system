@@ -4,13 +4,18 @@ import { CheckIcon } from '@heroicons/react/24/solid';
 interface StepIndicatorProps {
   currentStep: number;
   totalSteps: number;
-  stepLabels: string[];
+  stepLabels: { title: string; subtitle: string }[];
+  stepValidation?: { [key: number]: boolean };
+  showValidationErrors?: boolean;
 }
 
-export function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndicatorProps) {
+export function StepIndicator({ currentStep, totalSteps, stepLabels, stepValidation = {}, showValidationErrors = false }: StepIndicatorProps) {
   const getStepStatus = (stepNumber: number) => {
     if (stepNumber < currentStep) return 'completed';
-    if (stepNumber === currentStep) return 'current';
+    if (stepNumber === currentStep) {
+      if (showValidationErrors && !stepValidation[stepNumber]) return 'current-error';
+      return 'current';
+    }
     return 'upcoming';
   };
 
@@ -41,7 +46,9 @@ export function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndic
                     className={clsx(
                       'relative z-10 w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 border-4',
                       {
-                        'bg-primary border-primary text-white shadow-lg': status === 'completed' || status === 'current',
+                        'bg-primary border-primary text-white shadow-lg': status === 'completed' || (status === 'current' && stepValidation[stepNumber]),
+                        'bg-red-500 border-red-500 text-white shadow-lg': status === 'current-error',
+                        'bg-yellow-500 border-yellow-500 text-white shadow-lg': status === 'current' && !stepValidation[stepNumber] && showValidationErrors,
                         'bg-white border-gray-300 text-gray-400': status === 'upcoming',
                       }
                     )}
@@ -65,11 +72,15 @@ export function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndic
                       {
                         'text-primary': status === 'completed' || status === 'current',
                         'text-gray-900': status === 'current',
+                        'text-red-600': status === 'current-error',
                         'text-gray-400': status === 'upcoming',
                       }
                     )}>
-                      {label}
+                      {label.title}
                     </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {label.subtitle}
+                    </p>
                     <p className={clsx(
                       'text-sm transition-colors duration-200',
                       {
@@ -116,7 +127,9 @@ export function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndic
                     className={clsx(
                       'relative z-10 w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-300 border-4 bg-white',
                       {
-                        'border-primary text-primary shadow-lg ring-4 ring-primary/10': status === 'completed' || status === 'current',
+                        'border-primary text-primary shadow-lg ring-4 ring-primary/10': status === 'completed' || (status === 'current' && stepValidation[stepNumber]),
+                        'border-red-500 text-red-500 shadow-lg ring-4 ring-red-500/10': status === 'current-error',
+                        'border-yellow-500 text-yellow-600 shadow-lg ring-4 ring-yellow-500/10': status === 'current' && !stepValidation[stepNumber] && showValidationErrors,
                         'border-gray-300 text-gray-400': status === 'upcoming',
                       }
                     )}
@@ -141,10 +154,11 @@ export function StepIndicator({ currentStep, totalSteps, stepLabels }: StepIndic
                       'text-sm lg:text-base font-semibold transition-colors duration-200 leading-tight',
                       {
                         'text-primary': status === 'completed' || status === 'current',
+                        'text-red-600': status === 'current-error',
                         'text-gray-400': status === 'upcoming',
                       }
                     )}>
-                      {label}
+                      {label.title}
                     </h3>
                     <p className={clsx(
                       'text-xs mt-1 transition-colors duration-200',

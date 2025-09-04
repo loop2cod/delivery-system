@@ -41,7 +41,8 @@ api.interceptors.response.use(
       
       switch (status) {
         case 401:
-          // Unauthorized - handled by BusinessProvider
+          // Unauthorized - Don't show toast, let the component handle it gracefully
+          console.warn('Authentication required for API call:', error.config?.url);
           break;
         case 403:
           toast.error(errorData?.message || 'Access denied.');
@@ -101,6 +102,11 @@ export interface PriceCalculation {
   breakdown?: {
     tier: PricingTier;
     calculation: string;
+    multipliers?: {
+      priority: number;
+      urgency: number;
+      total: number;
+    };
   };
 }
 

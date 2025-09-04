@@ -84,6 +84,11 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
       async (error) => {
         const originalRequest = error.config;
         
+        // Skip auto-refresh for login requests to avoid interference with login error handling
+        if (originalRequest.url?.includes('/auth/login')) {
+          return Promise.reject(error);
+        }
+        
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
@@ -217,8 +222,12 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
 
       // Verify user is a business user
       if (userData.role !== 'BUSINESS') {
-        toast.error('This account is not authorized for business access');
-        throw new Error('Invalid account type');
+        const error = new Error('This account is not authorized for business access');
+        (error as any).response = {
+          status: 403,
+          data: { message: 'This account is not authorized for business access' }
+        };
+        throw error;
       }
 
       // Store tokens
@@ -272,8 +281,9 @@ export function BusinessProvider({ children }: BusinessProviderProps) {
         router.push('/profile');
       }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed';
-      toast.error(message);
+      // Don't show toast here - let the login page handle it for better UX
+      // The login page will show appropriate error messages based on error type
+      console.error('Login failed:', error);
       throw error;
     }
   };
