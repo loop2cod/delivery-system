@@ -4,9 +4,9 @@
   "description": "Unified backend API for UAE Delivery Management PWAs",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "build": "tsc && tsc-alias",
-    "start": "node dist/server.js",
+    "dev": "node init && tsx watch src/server.ts",
+    "build": "node init && tsc && tsc-alias",
+    "start": "node init && node dist/server.js",
     "lint": "eslint src/**/*.ts",
     "type-check": "tsc --noEmit",
     "test": "jest",

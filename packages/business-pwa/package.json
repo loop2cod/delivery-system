@@ -4,9 +4,9 @@
   "description": "UAE Delivery Management - Business Portal PWA",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3003",
-    "build": "next build",
-    "start": "next start -p 3003",
+    "dev": "node init && next dev -p 3003",
+    "build": "node init && next build",
+    "start": "node init && next start -p 3003",
     "lint": "next lint",
     "type-check": "tsc --noEmit"
   },
