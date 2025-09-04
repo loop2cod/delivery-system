@@ -104,7 +104,7 @@ export function RequestTable({
     pages: 0
   });
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
+  const [rowSelection, setRowSelection] = useState({});
 
   // Load requests data
   useEffect(() => {
@@ -163,49 +163,17 @@ export function RequestTable({
   };
 
 
-  const handleSelectRequest = (requestId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedRequests(prev => [...prev, requestId]);
-    } else {
-      setSelectedRequests(prev => prev.filter(id => id !== requestId));
-    }
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      // Select all requests on current page
-      const currentPageRequests = table.getRowModel().rows.map(row => row.original.id);
-      setSelectedRequests(prev => {
-        const combined = [...prev, ...currentPageRequests];
-        const newSelection = Array.from(new Set(combined));
-        return newSelection;
-      });
-    } else {
-      // Deselect all requests on current page
-      const currentPageRequests = table.getRowModel().rows.map(row => row.original.id);
-      setSelectedRequests(prev => prev.filter(id => !currentPageRequests.includes(id)));
-    }
-  };
-
-  // Check if all current page rows are selected
-  const isAllCurrentPageSelected = () => {
-    const currentPageRequests = table.getRowModel().rows.map(row => row.original.id);
-    return currentPageRequests.length > 0 && currentPageRequests.every(id => selectedRequests.includes(id));
-  };
-
-  // Check if some current page rows are selected
-  const isSomeCurrentPageSelected = () => {
-    const currentPageRequests = table.getRowModel().rows.map(row => row.original.id);
-    return currentPageRequests.some(id => selectedRequests.includes(id));
-  };
 
   const handlePrintLabels = () => {
-    if (selectedRequests.length === 0) {
+    const selectedRows = table.getFilteredSelectedRowModel().rows;
+    
+    if (selectedRows.length === 0) {
       toast.error('Please select at least one request to print labels');
       return;
     }
 
-    const selectedRequestsData = requests.filter(r => selectedRequests.includes(r.id));
+    const selectedRequestsData = selectedRows.map(row => row.original);
+    console.log(`Printing ${selectedRequestsData.length} labels`);
     printDeliveryLabels(selectedRequestsData);
   };
 
@@ -213,26 +181,29 @@ export function RequestTable({
     () => [
       {
         id: 'select',
-        header: () => (
-          <Checkbox
-            checked={isAllCurrentPageSelected()}
-            onCheckedChange={(checked) => handleSelectAll(!!checked)}
-            aria-label="Select all requests"
-            className="data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground"
-            ref={(el) => {
-              if (el && el.dataset) {
-                el.dataset.state = isSomeCurrentPageSelected() && !isAllCurrentPageSelected() ? 'indeterminate' : el.dataset.state;
+        header: ({ table }) => (
+          <div className="flex items-center justify-center w-full">
+            <Checkbox
+              checked={
+                table.getIsAllPageRowsSelected() ||
+                (table.getIsSomePageRowsSelected() && "indeterminate")
               }
-            }}
-          />
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="Select all"
+            />
+          </div>
         ),
         cell: ({ row }) => (
-          <Checkbox
-            checked={selectedRequests.includes(row.original.id)}
-            onCheckedChange={(checked) => handleSelectRequest(row.original.id, !!checked)}
-            aria-label={`Select request ${row.getValue('requestNumber')}`}
-          />
+          <div className="flex items-center justify-center w-full">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label="Select row"
+            />
+          </div>
         ),
+        enableSorting: false,
+        enableHiding: false,
       },
       {
         accessorKey: 'requestNumber',
@@ -412,6 +383,7 @@ export function RequestTable({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -420,6 +392,7 @@ export function RequestTable({
       sorting,
       columnFilters,
       globalFilter,
+      rowSelection,
     },
     enableRowSelection: true,
     getRowId: (row) => row.id,
@@ -442,17 +415,17 @@ export function RequestTable({
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-          {selectedRequests.length > 0 && (
+          {Object.keys(rowSelection).length > 0 && (
             <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
               <button
                 onClick={handlePrintLabels}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary/90"
               >
                 <PrinterIcon className="h-4 w-4 mr-2" />
-                Print Labels ({selectedRequests.length})
+                Print Labels ({table.getFilteredSelectedRowModel().rows.length})
               </button>
               <button
-                onClick={() => setSelectedRequests([])}
+                onClick={() => setRowSelection({})}
                 className="w-full sm:w-auto inline-flex items-center justify-center px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 Clear Selection
@@ -466,26 +439,23 @@ export function RequestTable({
       </div>
 
       {/* Selection Summary */}
-      {selectedRequests.length > 0 && (
+      {Object.keys(rowSelection).length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="text-sm font-medium text-blue-900">
-                {selectedRequests.length} request{selectedRequests.length !== 1 ? 's' : ''} selected for printing
+                {table.getFilteredSelectedRowModel().rows.length} request{table.getFilteredSelectedRowModel().rows.length !== 1 ? 's' : ''} selected for printing
               </div>
             </div>
             <div className="flex items-center space-x-2">
               <button
-                onClick={() => {
-                  // Select all requests across all pages
-                  setSelectedRequests(requests.map(r => r.id));
-                }}
+                onClick={() => table.toggleAllPageRowsSelected(true)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
                 Select All on Page
               </button>
               <button
-                onClick={() => setSelectedRequests([])}
+                onClick={() => setRowSelection({})}
                 className="text-xs text-red-600 hover:text-red-800 font-medium"
               >
                 Clear All
@@ -560,8 +530,8 @@ export function RequestTable({
                     <div className="flex items-start justify-between">
                       <div className="flex items-center space-x-3">
                         <Checkbox
-                          checked={selectedRequests.includes(row.original.id)}
-                          onCheckedChange={(checked) => handleSelectRequest(row.original.id, !!checked)}
+                          checked={row.getIsSelected()}
+                          onCheckedChange={(value) => row.toggleSelected(!!value)}
                           aria-label={`Select request ${row.getValue('requestNumber')}`}
                         />
                         <div>
@@ -830,178 +800,219 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Delivery Labels - J&T Express</title>
+      <title>Delivery Labels - GRS DELIVERY</title>
       <style>
         @page {
           size: A4;
-          margin: 8mm;
+          margin: 5mm;
         }
         body {
           margin: 0;
           padding: 0;
-          font-family: 'Arial', sans-serif;
+          font-family: 'Consolas', 'Courier New', monospace;
           background: white;
+          font-size: 8pt;
+          line-height: 1.1;
+          color: #000;
         }
         .page {
-          width: 100%;
-          min-height: 100vh;
-          display: flex;
-          flex-wrap: wrap;
-          align-content: flex-start;
-          gap: 2mm;
+          width: 210mm;
+          height: 297mm;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          grid-template-rows: 1fr 1fr;
+          gap: 5mm;
+          padding: 5mm;
+          box-sizing: border-box;
+          page-break-after: always;
+        }
+        .page:last-child {
+          page-break-after: auto;
         }
         .label {
-          width: calc(50% - 1mm);
-          height: calc(50vh - 1mm);
+          width: 100mm;
+          height: 141mm;
           border: 2px solid #000;
-          padding: 6mm;
-          font-family: 'Arial', sans-serif;
-          font-size: 9px;
-          line-height: 1.3;
-          page-break-inside: avoid;
-          display: inline-block;
-          vertical-align: top;
+          padding: 3mm;
           box-sizing: border-box;
           background: white;
           position: relative;
+          font-size: 8pt;
+          line-height: 1.1;
+          display: flex;
+          flex-direction: column;
         }
         .label-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          border-bottom: 1px solid #333;
+          border-bottom: 2px solid #2563eb;
           padding-bottom: 2mm;
-          margin-bottom: 3mm;
+          margin-bottom: 2mm;
+          background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+          margin: -3mm -3mm 2mm -3mm;
+          padding: 2mm 3mm;
+          border-radius: 1mm 1mm 0 0;
         }
         .logo {
-          font-weight: bold;
-          font-size: 16px;
-          color: #333;
+          font-weight: 900;
+          font-size: 14px;
+          color: #1a365d;
+          letter-spacing: 0.5px;
+          background: linear-gradient(135deg, #2563eb, #1d4ed8);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
         .service-type {
           text-align: right;
-          font-size: 10px;
+          font-size: 8px;
         }
         .service-type .type {
           font-weight: bold;
-          font-size: 12px;
+          font-size: 10px;
           color: #000;
         }
         .tracking-info {
           display: flex;
           justify-content: space-between;
-          margin-bottom: 4mm;
+          margin-bottom: 2mm;
           font-weight: bold;
         }
         .tracking-number {
-          font-size: 11px;
+          font-size: 9px;
           color: #000;
         }
         .sequence {
-          font-size: 10px;
+          font-size: 8px;
         }
         .contact-section {
-          margin-bottom: 3mm;
-          padding-left: 1mm;
+          margin-bottom: 1.5mm;
+          border: 1px solid #000;
+          padding: 1mm;
         }
         .contact-label {
           font-weight: bold;
-          font-size: 9px;
-          color: #666;
-          margin-bottom: 1mm;
+          font-size: 6pt;
+          color: #000;
+          text-transform: uppercase;
+          border-bottom: 1px solid #ccc;
+          margin-bottom: 0.5mm;
+          padding-bottom: 0.5mm;
         }
         .contact-name {
           font-weight: bold;
-          font-size: 11px;
+          font-size: 7pt;
           color: #000;
-          margin-bottom: 1mm;
+          margin-bottom: 0.5mm;
         }
         .contact-phone {
-          font-size: 10px;
-          color: #333;
-          margin-bottom: 1mm;
+          font-size: 6pt;
+          color: #000;
+          margin-bottom: 0.5mm;
         }
         .contact-address {
-          font-size: 8px;
-          color: #555;
-          line-height: 1.2;
+          font-size: 6pt;
+          color: #000;
+          line-height: 1.1;
+          word-wrap: break-word;
         }
         .items-section {
-          margin-bottom: 4mm;
-          background: #f8f9fa;
-          padding: 2mm;
-          border-radius: 2px;
+          margin-bottom: 1.5mm;
+          border: 1px solid #000;
+          padding: 1mm;
         }
         .items-title {
           font-weight: bold;
-          font-size: 10px;
-          margin-bottom: 2mm;
+          font-size: 5pt;
+          margin-bottom: 0.5mm;
           color: #000;
+          text-transform: uppercase;
+          border-bottom: 1px solid #ccc;
+          padding-bottom: 0.5mm;
         }
         .item {
-          font-size: 8px;
-          margin-bottom: 1mm;
+          font-size: 4pt;
+          margin-bottom: 0.5mm;
+          color: #000;
+          line-height: 1.0;
+        }
+        .schedule-qr-section {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 2mm;
+          gap: 1mm;
+        }
+        .schedule-info {
+          flex: 1;
+          font-size: 7px;
+          background: #f0f8ff;
+          padding: 1mm;
+          border-radius: 1px;
+        }
+        .schedule-item {
+          margin-bottom: 0.5mm;
           color: #333;
         }
         .qr-section {
           text-align: center;
-          margin-bottom: 4mm;
-        }
-        .qr-container {
-          text-align: center;
+          border: 1px solid #000;
+          padding: 0.5mm;
+          width: 25mm;
+          flex-shrink: 0;
         }
         .qr-title {
           font-weight: bold;
-          font-size: 9px;
-          margin-bottom: 1mm;
-          color: #333;
+          font-size: 5pt;
+          margin-bottom: 0.5mm;
+          color: #000;
+          text-transform: uppercase;
         }
         .qr-code {
-          width: 80px;
-          height: 80px;
-          border: 1px solid #ccc;
+          width: 20mm;
+          height: 20mm;
+          border: 1px solid #000;
+          display: block;
+          margin: 0 auto;
         }
         .request-number {
           font-weight: bold;
-          font-size: 10px;
-          margin-bottom: 2mm;
+          font-size: 6px;
+          margin-bottom: 0.5mm;
           color: #000;
         }
-        .schedule-info {
-          margin-bottom: 3mm;
-          font-size: 8px;
-          background: #f0f8ff;
-          padding: 2mm;
-          border-radius: 2px;
-        }
-        .schedule-item {
-          margin-bottom: 1mm;
-          color: #333;
-        }
         .reference-special {
-          font-size: 8px;
-          margin-bottom: 3mm;
+          font-size: 6px;
+          margin-bottom: 1mm;
         }
         .internal-ref {
           color: #666;
-          margin-bottom: 1mm;
+          margin-bottom: 0.5mm;
         }
         .special-requirements {
           font-weight: bold;
-          font-size: 8px;
+          font-size: 6px;
           color: #dc2626;
+          padding: 0.5mm;
+        }
+        .weight-cost {
+          display: flex;
+          justify-content: space-between;
+          font-size: 6pt;
+          font-weight: bold;
+          border: 1px solid #000;
           padding: 1mm;
+          margin-bottom: 1.5mm;
+          background: #f0f0f0;
         }
         .footer {
-          border-top: 1px solid #ccc;
-          padding-top: 2mm;
+          border-top: 1px solid #000;
+          padding-top: 1mm;
           text-align: center;
-          font-size: 7px;
-          color: #666;
-          position: absolute;
-          bottom: 6mm;
-          left: 6mm;
-          right: 6mm;
+          font-size: 5pt;
+          color: #000;
+          margin-top: auto;
         }
         @media print {
           .page {
@@ -1018,11 +1029,13 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
       </style>
     </head>
     <body>
-      ${Array.from({ length: Math.ceil(requests.length / 4) }, (_, pageIndex) => {
-    const pageLabels = requests.slice(pageIndex * 4, (pageIndex + 1) * 4);
-    return `
-          <div class="page">
-            ${pageLabels.map((request) => {
+      ${(() => {
+        const pages = [];
+        for (let i = 0; i < requests.length; i += 4) {
+          const pageRequests = requests.slice(i, i + 4);
+          pages.push(`
+            <div class="page">
+              ${pageRequests.map((request) => {
       const codItems = request.items?.filter((item: any) => item.paymentType === 'cod') || [];
       const totalCOD = codItems.reduce((sum: number, item: any) => sum + (item.codAmount || 0), 0);
       const hasFragileItems = request.items?.some((item: any) => item.fragile) || false;
@@ -1040,7 +1053,7 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
                 <div class="label">
                   <!-- Header -->
                   <div class="label-header">
-                    <div class="logo">GRS Deliver</div>
+                    <div class="logo">GRS DELIVERY</div>
                     <div class="service-type">
                       <div class="type">STANDARD</div>
                       <div>Print: ${currentDate}</div>
@@ -1051,6 +1064,12 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
                   <div class="tracking-info">
                     <div class="tracking-number">${request.requestNumber}</div>
                     <div class="sequence">1/1</div>
+                  </div>
+
+                  <!-- Weight & Cost -->
+                  <div class="weight-cost">
+                    <div>Weight: ${(request.totalWeight || 0).toFixed(1)}kg</div>
+                    <div>Cost: AED ${(request.actualCost || request.estimatedCost || 0).toFixed(2)}</div>
                   </div>
 
                   <!-- Shipper Info -->
@@ -1082,19 +1101,32 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
                     `).join('') || '<div class="item">No items specified</div>'}
                   </div>
 
-                  <!-- QR Code Section -->
-                  <div class="qr-section">
-                    <div class="qr-container">
-                      <div class="request-number">${request.requestNumber}</div>
-                      <div class="qr-title">QR CODE</div>
-                      <img src="${generateQRCode(qrData, 80)}" alt="QR Code" class="qr-code" />
+                  <!-- Combined Schedule and QR Section -->
+                  <div class="schedule-qr-section">
+                    <!-- Schedule Info -->
+                    <div class="schedule-info">
+                      <div class="schedule-item"><strong>Pickup:</strong> ${(() => {
+                        if (request.pickupDate && request.pickupDate !== 'null') {
+                          const date = new Date(request.pickupDate);
+                          return isNaN(date.getTime()) ? 'Flexible' : date.toLocaleDateString();
+                        }
+                        return 'Flexible';
+                      })()} at ${request.pickupTime || 'TBD'}</div>
+                      <div class="schedule-item"><strong>Delivery:</strong> ${(() => {
+                        if (request.deliveryDate && request.deliveryDate !== 'null') {
+                          const date = new Date(request.deliveryDate);
+                          return isNaN(date.getTime()) ? 'Flexible' : date.toLocaleDateString();
+                        }
+                        return 'Flexible';
+                      })()} at ${request.deliveryTime || 'TBD'}</div>
                     </div>
-                  </div>
-
-                  <!-- Schedule Info -->
-                  <div class="schedule-info">
-                    <div class="schedule-item"><strong>Pickup:</strong> ${new Date(request.pickupDate).toLocaleDateString()} at ${request.pickupTime || '00:00'}</div>
-                    <div class="schedule-item"><strong>Delivery:</strong> ${new Date(request.deliveryDate).toLocaleDateString()} at ${request.deliveryTime || '00:00'}</div>
+                    
+                    <!-- QR Code Section -->
+                    <div class="qr-section">
+                      <div class="request-number">${request.requestNumber}</div>
+                      <div class="qr-title">TRACK</div>
+                      <img src="${generateQRCode(qrData, 70)}" alt="QR Code" class="qr-code" />
+                    </div>
                   </div>
 
                   <!-- Reference and Special -->
@@ -1105,14 +1137,16 @@ const printDeliveryLabels = (requests: DeliveryRequest[]) => {
 
                   <!-- Footer -->
                   <div class="footer">
-                    J&T Express UAE | Customer Service: +971-4-543-5201 | www.jtexpress.ae
+                    GRS DELIVERY SERVICES | Customer Service: +971-4-XXX-XXXX | www.grsdelivery.ae
                   </div>
                 </div>
               `;
-    }).join('')}
-          </div>
-        `;
-  }).join('')}
+              }).join('')}
+            </div>
+          `);
+        }
+        return pages.join('');
+      })()}
     </body>
     </html>
   `;
